@@ -7,7 +7,7 @@ const tokenSign = async (user) => {
     const sing = jwt.sign(
         {
             id: user.id,
-            role: user.role
+            rol: user.rol
         },
         JWT_SECRET,
         {

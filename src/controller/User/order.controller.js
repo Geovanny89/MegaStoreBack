@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Order = require('../../models/Order');
 const Productos = require('../../models/Productos');
 const User = require('../../models/User');
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const createOrder = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -141,7 +141,7 @@ const deleteOrder = async (req, res) => {
     }
 };
 
-//**    enpoind para completar la compra // 
+// **    enpoind para completar la compra // 
 //   COLPETAR ORDEN //
 // */
 const completeOrder = async (req, res) => {
@@ -175,13 +175,12 @@ const completeOrder = async (req, res) => {
             message: "Compra completada exitosamente",
             order
         });
-
+        
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "Error al completar compra" });
     }
 };
-
 
 module.exports = {
     createOrder,
@@ -189,6 +188,95 @@ module.exports = {
     deleteOrder,
     completeOrder
 };
+// const completeOrder = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const userId = req.user.id;
+
+//         const order = await Order.findById(id).populate('products.product');
+
+//         if (!order) return res.status(404).json({ message: "Orden no encontrada" });
+
+//         if (order.user.toString() !== userId.toString())
+//             return res.status(403).json({ message: "No autorizado" });
+
+//         if (order.status !== "pending")
+//             return res.status(400).json({ message: "La orden ya fue procesada o cancelada." });
+
+//         // ✅ Crear sesión de Stripe
+//         const lineItems = order.products.map(item => ({
+//             price_data: {
+//                 currency: 'usd',
+//                 product_data: {
+//                     name: item.product.name,
+//                     images: [item.product.image],
+//                 },
+//                 unit_amount: Math.round(item.price * 100),
+//             },
+//             quantity: item.quantity,
+//         }));
+
+//         const session = await stripe.checkout.sessions.create({
+//             payment_method_types: ['card'],
+//             line_items: lineItems,
+//             mode: 'payment',
+//             success_url: `${process.env.FRONT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+//             cancel_url: `${process.env.FRONT_URL}/cancel`,
+//             metadata: { orderId: order._id.toString() },
+//         });
+
+//         res.status(200).json({ url: session.url }); // ⚠ Aquí devuelves la URL de Stripe
+//     } catch (error) {
+//         console.log(error);
+//         return res.status(500).json({ message: "Error al iniciar pago" });
+//     }
+// };
+// const normalizeImages = (imageField) => {
+//   if (!imageField) return [];
+//   if (typeof imageField === 'string') return [imageField];
+//   if (Array.isArray(imageField)) return imageField.filter(url => typeof url === 'string');
+//   if (typeof imageField === 'object') return Object.values(imageField).flat().filter(url => typeof url === 'string');
+//   return [];
+// };
+// const completeOrder = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user.id;
+
+//     const order = await Order.findById(id).populate('products.product');
+
+//     if (!order) return res.status(404).json({ message: "Orden no encontrada" });
+//     if (order.user.toString() !== userId.toString()) return res.status(403).json({ message: "No autorizado" });
+//     if (order.status !== "pending") return res.status(400).json({ message: "La orden ya fue procesada o cancelada." });
+
+//     const lineItems = order.products.map(item => ({
+//       price_data: {
+//         currency: 'usd',
+//         product_data: {
+//           name: item.product.name,
+//           images: normalizeImages(item.product.image),
+//         },
+//         unit_amount: Math.round(item.price * 100),
+//       },
+//       quantity: item.quantity,
+//     }));
+
+//     const session = await stripe.checkout.sessions.create({
+//       payment_method_types: ['card'],
+//       line_items: lineItems,
+//       mode: 'payment',
+//       success_url: `${process.env.FRONT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+//       cancel_url: `${process.env.FRONT_URL}/cancel`,
+//       metadata: { orderId: order._id.toString() },
+//     });
+
+//     res.status(200).json({ url: session.url });
+//   } catch (error) {
+//     console.log(error);
+//     res.status(500).json({ message: "Error al iniciar pago", error: error.message });
+//   }
+// };
+
 
 
 
