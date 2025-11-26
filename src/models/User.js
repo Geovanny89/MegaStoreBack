@@ -24,11 +24,15 @@ const userSchema = mongoose.Schema({
     addresses: [addressSchema],
     rol: {
         type: String,
-        enum: ["user", "admin", "seller"],
-        default: "user"
+        enum: ["user", "seller", "admin"],
+        required: true
     },
-  // solo para sellers
-    storeName: { type: String },
+
+    // solo sellers usan este campo
+    storeName: {
+        type: String,
+        default: null
+    },
 })
 
 

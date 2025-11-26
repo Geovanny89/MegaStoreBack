@@ -1,137 +1,105 @@
+const mongoose = require('mongoose');
 const Order = require('../../models/Order');
 const Productos = require('../../models/Productos');
 const User = require('../../models/User');
 
-
 const createOrder = async (req, res) => {
     try {
-        const { id } = req.params;
-
-        const user = await User.findById(id);
-        if (!user) {
-            res.status(404).send("No existe Usuario con ese ID");
-            return;
-        }
-
-        const productsInfo = req.body.products;
-
-        if (!productsInfo || !Array.isArray(productsInfo) || productsInfo.length === 0) {
-            res.status(400).send("La solicitud debe incluir información válida sobre productos.");
-            return;
-        }
+        const userId = req.user.id;
+        const { products, shippingAddress } = req.body;
 
         let total = 0;
         const orderProducts = [];
 
-        for (const { productId, quantity } of productsInfo) {
-            if (!productId || !quantity || isNaN(quantity) || quantity <= 0) {
-                res.status(400).send("Cada producto debe tener un productId y una cantidad válida.");
-                return;
-            }
+        for (const item of products) {
+            const product = await Productos.findById(item.productId);
 
-            const product = await Productos.findById(productId);
             if (!product) {
-                res.status(404).send(`No existe producto con el ID: ${productId}`);
-                return;
+                return res.status(404).json({ message: "Producto no encontrado" });
             }
 
-            if (quantity > product.stock) {
-                res.status(400).send(`La cantidad solicitada para el producto ${productId} supera el stock disponible.`);
-                return;
-            }
-
-            total += product.price * quantity;
-
-            // Actualiza el stock en la base de datos
-            product.stock -= quantity;
-            await product.save();
+            const price = product.price;
 
             orderProducts.push({
-                product: productId,
-                quantity: quantity,
+                product: product._id,
+                quantity: item.quantity,
+                price: price,           // ← ESTA ES LA CLAVE
+                seller: product.owner   // si manejas marketplace
             });
+
+            total += price * item.quantity;
         }
 
-        // Crea la orden utilizando el modelo Order
-        const order = new Order({
+        const newOrder = await Order.create({
+            user: userId,
             products: orderProducts,
-            user: user._id,
-            total: total,
-            status: 'pending',
+            shippingAddress,
+            total
         });
 
-        await order.save();
+        return res.status(201).json(newOrder);
 
-        res.status(201).json(order); // 201 indica que se creó con éxito
     } catch (error) {
         console.log(error);
-        res.status(500).send("Error interno del servidor");
+        return res.status(500).json({ message: "Error al crear orden" });
     }
 };
+
 const updateOrder = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         const { id } = req.params;
-        if (!id) {
-            res.status(404).send("No existe orden con esa ID");
-            return;
-        }
-
         const { products } = req.body;
 
-        if (!products || !Array.isArray(products) || products.length === 0) {
-            res.status(400).send("La solicitud debe incluir información válida sobre productos.");
-            return;
-        }
-
-        const currentOrder = await Order.findById(id);
-        
-
-        if (!currentOrder) {
-            res.status(404).send("No se encontró la orden para actualizar.");
-            return;
+        const order = await Order.findById(id).session(session);
+        if (!order) {
+            return res.status(404).json({ message: "Orden no encontrada." });
         }
 
         let newTotal = 0;
 
         for (const { productId, quantity } of products) {
-            if (!productId || !quantity || isNaN(quantity) || quantity <= 0) {
-                res.status(400).send("Cada producto debe tener un productId y una cantidad válida.");
-                return;
-            }
-        
-            const currentProduct = currentOrder.products.find(p => p.product.toString() === productId);
-        
-            // console.log("Productos en la orden:", currentOrder.products);
-            // console.log("ProductId proporcionado:", productId);
-        
-            if (!currentProduct) {
-                res.status(400).send(`El producto con ID ${productId} no está presente en la orden actual.`);
-                return;
-            }
-        
-            const productData = await Productos.findById(productId);
-        
-            const quantityDiff = quantity - currentProduct.quantity;
-            console.log(quantityDiff)
-        
-            productData.stock -= quantityDiff;
-            await productData.save();
-        
-            newTotal += productData.price * quantity;
-            console.log("total:", newTotal)
-        
-            currentProduct.quantity = quantity;
-        }
-        currentOrder.total = newTotal;
-        const orderUpdate = await currentOrder.save();
-        
+            const orderItem = order.products.find(p => p.product.toString() === productId);
 
-        res.status(202).send(orderUpdate);
+            if (!orderItem) {
+                return res.status(400).json({ message: `El producto ${productId} no está en esta orden.` });
+            }
+
+            const product = await Productos.findById(productId).session(session);
+            if (!product) {
+                return res.status(404).json({ message: `Producto no encontrado: ${productId}` });
+            }
+
+            const diff = quantity - orderItem.quantity;
+
+            if (diff > 0 && diff > product.stock) {
+                return res.status(400).json({ message: `Stock insuficiente para ${product.name}` });
+            }
+
+            product.stock -= diff; // si diff es negativo, stock aumenta
+            await product.save({ session });
+
+            newTotal += product.price * quantity;
+            orderItem.quantity = quantity;
+        }
+
+        order.total = newTotal;
+        const updatedOrder = await order.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json(updatedOrder);
+
     } catch (error) {
-        console.log(error);
+        await session.abortTransaction();
+        session.endSession();
         res.status(500).json({ message: error.message });
     }
 };
+
 
 const deleteOrder = async (req, res) => {
     try {
@@ -173,10 +141,53 @@ const deleteOrder = async (req, res) => {
     }
 };
 
+//**    enpoind para completar la compra // 
+//   COLPETAR ORDEN //
+// */
+const completeOrder = async (req, res) => {
+    try {
+        const { id } = req.params; // ID de la orden
+        const userId = req.user.id; // viene del token
+
+        const order = await Order.findById(id);
+
+        if (!order) {
+            return res.status(404).json({ message: "Orden no encontrada" });
+        }
+
+        // Verificar si la orden pertenece al usuario autenticado
+        if (order.user.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "No estás autorizado para completar esta orden." });
+        }
+
+        // La orden debe estar pendiente
+        if (order.status !== "pending") {
+            return res.status(400).json({ message: "La orden ya fue procesada o cancelada." });
+        }
+
+        // 🔥 Aquí normalmente validarías el pago real (Stripe/MercadoPago/PayPal)
+        // por ahora asumimos que el pago fue aprobado.
+
+        order.status = "paid";
+        await order.save();
+
+        return res.status(200).json({
+            message: "Compra completada exitosamente",
+            order
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Error al completar compra" });
+    }
+};
+
+
 module.exports = {
     createOrder,
     updateOrder,
-    deleteOrder
+    deleteOrder,
+    completeOrder
 };
 
 

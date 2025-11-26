@@ -1,4 +1,4 @@
-const { check } = require("express-validator");
+const { check, body } = require("express-validator");
 const { validateResult } = require("../utils/handleValidators");
 
 const validateLogin = [
@@ -15,7 +15,13 @@ const validateRegister = [
     check("email").exists().notEmpty().isEmail(),
     check("password").exists().notEmpty().isLength({ min: 8, max: 15 }),
     check("phone").exists().notEmpty(), // Agrega la validación para el campo phone
-    check("adress").exists().notEmpty(), // Agrega la validación para el campo adress
+    check("addresses").exists().notEmpty(), // Agrega la validación para el campo adress
+    check("rol").exists().notEmpty().isIn(["user", "seller"]),
+    // ✔ storeName solo obligatorio si es seller
+    body("storeName")
+        .if(body("rol").equals("seller"))
+        .exists().withMessage("storeName es obligatorio para sellers")
+        .notEmpty().withMessage("storeName no puede estar vacío"),
     (req, res, next) => {
         validateResult(req, res, next);
     },

@@ -8,12 +8,12 @@ const upload = multer({ storage: storage });
 const router = express();
 
 
-router.get('/allProduct',authMiddleware,checkRol(["admin"]),allProduct);
-router.get('/:name',authMiddleware,checkRol(["admin"]),productName);
+router.get('/allProduct',authMiddleware,allProduct);
+router.get('/:name',authMiddleware,productName);
 router.get('/product/:id',getProductId)
-router.post('/create', authMiddleware, upload.array('image', 7), checkRol(["admin"]), createProduct);
-router.put('/update/:id',authMiddleware,checkRol(["admin"]),updateProduct)
-router.delete('/delete/:id',authMiddleware,checkRol(["admin"]),deleteProduct)
+router.post('/create', authMiddleware, upload.array('image', 7), checkRol(["admin","seller"]), createProduct);
+router.put('/update/:id',authMiddleware,checkRol(["admin","seller"]),updateProduct)
+router.delete('/delete/:id',authMiddleware,checkRol(["admin","seller"]),deleteProduct)
 
 
 module.exports = router

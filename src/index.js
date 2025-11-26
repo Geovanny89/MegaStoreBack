@@ -3,6 +3,9 @@ const { JWT_SECRET}= process.env
 const cors = require('cors');
 const bodyParser= require('body-parser')
 const cookieParser = require("cookie-parser");
+const stripeRoutes = require('./routes/User/stripe.js');
+
+
 
 require('dotenv').config();
 const app = express();
@@ -29,10 +32,10 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser(JWT_SECRET));
-
+app.use('/api/stripe', stripeRoutes);
 app.use(express.json());
 
-
+app.use('/api/webhook/stripe', express.raw({ type: 'application/json' }));
 
 
 const PORT = process.env.PORT || 3001

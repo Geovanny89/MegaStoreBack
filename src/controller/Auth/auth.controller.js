@@ -5,37 +5,36 @@ const { encrypt,compare} = require('../../utils/handlePassword')
 const { transporter, mailDetails } = require('../../mailer/nodemailer');
 const { tokenSign } = require('../../utils/handleJwt');
 
-const register = async (req, res) => {
-    try {
+// const register = async (req, res) => {
+//     try {
         
-        // const {name,lastName,identity,email,password,phone,adress}= req.body;
-        const requestData = matchedData(req);
-        const existingUser = await User.findOne({
-            where: { email: requestData.email }
-            });
-            if (existingUser) {
-                // Si el correo ya existe, envía una respuesta indicando que no es posible registrar el correo
-                return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
-            }
-            const password = await encrypt(requestData.password);
-            console.log(password)
-            const body = { ...requestData, password };
-        const newUser = await User(body)
+//         // const {name,lastName,identity,email,password,phone,adress}= req.body;
+//         const requestData = matchedData(req);
+//         const existingUser = await User.findOne({ email: requestData.email });
+
+//             if (existingUser) {
+//                 // Si el correo ya existe, envía una respuesta indicando que no es posible registrar el correo
+//                 return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
+//             }
+//             const password = await encrypt(requestData.password);
+//             console.log(password)
+//             const body = { ...requestData, password };
+//         const newUser = await User(body)
 
        
 
-        // Guardar el nuevo usuario en la base de datos
-        await newUser.save();
-        const welcomeEmail = mailDetails(newUser.email, newUser.name); // Reemplaza 'NúmeroRadicadoGenerado' con la lógica necesaria
-        await transporter.sendMail(welcomeEmail);
+//         // Guardar el nuevo usuario en la base de datos
+//         await newUser.save();
+//         const welcomeEmail = mailDetails(newUser.email, newUser.name); // Reemplaza 'NúmeroRadicadoGenerado' con la lógica necesaria
+//         await transporter.sendMail(welcomeEmail);
 
-        // Devolver una respuesta exitosa
-        res.status(201).send(newUser)
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error al registrar el usuario' });
-    }
-};
+//         // Devolver una respuesta exitosa
+//         res.status(201).send(newUser)
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Error al registrar el usuario' });
+//     }
+// };
 // const login = async(req,res)=>{
 //     try {
 //         req=matchedData(req)
@@ -66,6 +65,44 @@ const register = async (req, res) => {
 //         res.status(500).send({ message: error.message })
 //     }
 // }
+const register = async (req, res) => {
+    try {
+        const data = matchedData(req);
+
+        // verificar email existente
+        const existingUser = await User.findOne({ email: data.email });
+        if (existingUser) {
+            return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
+        }
+
+        // encriptar
+        const hashedPassword = await encrypt(data.password);
+
+        // estructura del body que se guardará
+        const userData = { 
+            ...data, 
+            password: hashedPassword 
+        };
+
+        // si es seller pero NO envía storeName → error
+        if (userData.rol === "seller" && !userData.storeName) {
+            return res.status(400).json({ error: "Los sellers deben enviar storeName" });
+        }
+
+        const newUser = new User(userData);
+        await newUser.save();
+
+        // enviar email
+        const welcomeEmail = mailDetails(newUser.email, newUser.name);
+        await transporter.sendMail(welcomeEmail);
+
+        res.status(201).json(newUser);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al registrar el usuario' });
+    }
+};
+
 const login = async (req, res) => {
     try {
         const requestData = matchedData(req);
