@@ -1,6 +1,7 @@
 const Productos = require('../../models/Productos')
 const TipoProductos = require('../../models/TipoProductos');
 const cloudinary = require('../../utils/cloudinary');
+const Suscripciones = require('../../models/Suscripcion');
 
 /**
  * Obtener todos los productos.
@@ -243,6 +244,38 @@ const createProduct = async (req, res) => {
     if (existingProduct) {
       return res.status(400).json({ message: "El producto ya existe" });
     }
+    // ------------------------------
+    // VALIDAR SUSCRIPCIÓN DEL SELLER
+    // ------------------------------
+    const sellerId = req.user.id; // Asegúrate de que req.user llegue con el JWT
+
+    const suscripcionActiva = await Suscripciones.findOne({
+      id_usuario: sellerId,
+      estado: "activa"
+    }).populate("plan_id");
+
+    if (!suscripcionActiva) {
+      return res.status(403).json({
+        message: "Debes tener una suscripción activa para crear productos."
+      });
+    }
+
+    const plan = suscripcionActiva.plan_id;
+
+    let limiteProductos = null;
+    if (plan.nombre === "basico") limiteProductos = 15;
+    if (plan.nombre === "avanzado") limiteProductos = 50;
+
+    const productosActuales = await Productos.countDocuments({ vendedor: sellerId });
+
+    if (limiteProductos !== null && productosActuales >= limiteProductos) {
+      return res.status(403).json({
+        message: `Tu plan (${plan.nombre}) solo permite ${limiteProductos} productos`
+      });
+    }
+
+    // FIN VALIDACIÓN DE SUSCRIPCIÓN
+    // ------------------------------
 
     // Validar tipo de producto
     const tipo = await TipoProductos.findById(tipoId);
@@ -303,7 +336,8 @@ const createProduct = async (req, res) => {
       sise: sizesArray,
       color: colorsArray,
       image: imageUrls,
-      tipo: tipoId
+      tipo: tipoId,
+      vendedor: sellerId
     });
 
     await product.save();

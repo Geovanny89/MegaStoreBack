@@ -22,6 +22,13 @@ const validateRegister = [
         .if(body("rol").equals("seller"))
         .exists().withMessage("storeName es obligatorio para sellers")
         .notEmpty().withMessage("storeName no puede estar vacío"),
+
+        // ✔ planId obligatorio solo si es seller
+    body("planId")
+        .if(body("rol").equals("seller"))
+        .exists().withMessage("planId es obligatorio para sellers")
+        .notEmpty().withMessage("planId no puede estar vacío")
+        .isMongoId().withMessage("El planId debe ser un ObjectId válido"),
     (req, res, next) => {
         validateResult(req, res, next);
     },

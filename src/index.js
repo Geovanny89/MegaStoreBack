@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require('cors');
 const bodyParser= require('body-parser');
 const cookieParser = require("cookie-parser");
+const seedPlanes = require('./seed/seedPlanes.js');
 const stripeRoutes = require('./routes/User/stripe.js');
 const stripeWebhookHandler = require('./webhooks/stripeWebhook');
 const { JWT_SECRET } = process.env;
@@ -72,3 +73,4 @@ app.listen(PORT, () => {
 require('./database/db.js');
 const createAdmin = require('./utils/createAdmin');
 createAdmin();
+seedPlanes();

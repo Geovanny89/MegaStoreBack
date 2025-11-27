@@ -12,7 +12,7 @@ const carrito = require('./User/Carrito')
 const favorite= require('./User/favoritos')
 const address = require('./User/Address')
 const question= require('./Questions/productQuestionRoutes')
-
+const suscripciones = require('./User/suscripciones')
 
 
 
@@ -31,6 +31,7 @@ router.use(carrito)
 router.use(favorite)
 router.use(address)
 router.use(question)
+router.use(suscripciones)
 
 
 
