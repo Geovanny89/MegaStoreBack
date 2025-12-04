@@ -13,7 +13,7 @@ const favorite= require('./User/favoritos')
 const address = require('./User/Address')
 const question= require('./Questions/productQuestionRoutes')
 const suscripciones = require('./User/suscripciones')
-
+const planes = require('./Planes/planes')   
 
 
 const router = express();
@@ -32,6 +32,7 @@ router.use(favorite)
 router.use(address)
 router.use(question)
 router.use(suscripciones)
+router.use(planes)
 
 
 

@@ -4,9 +4,9 @@ const authMiddleware = require("../../middleware/sesion");
 
 const router=express();
 
-router.get('/car/all',authMiddleware,verProductosEnCarrito)
-router.post('/car',authMiddleware, agregarProductoAlCarrito)
-router.delete('/car/delete/:id', authMiddleware,deleteProductoCarrito)
+router.get('/user/carAll',authMiddleware,verProductosEnCarrito)
+router.post('/user/car',authMiddleware, agregarProductoAlCarrito)
+router.delete('/user/car/delete/:id', authMiddleware,deleteProductoCarrito)
 
 
 

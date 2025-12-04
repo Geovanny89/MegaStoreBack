@@ -12,18 +12,19 @@ const Suscripciones = require('../../models/Suscripcion');
  */
 
 const allProduct = async (req, res) => {
-    try {
-        const product = await Productos.find().populate('tipo');
+  try {
+    const product = await Productos.find().populate('tipo');
 
-        if (!product) {
-            res.status(400).send("No existen productos")
-            return
-        }
-        res.status(200).send(product)
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+    if (product.length === 0) {
+      res.status(404).json({ message: "No existen productos" });
+      return
     }
+
+    res.status(200).send(product)
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: error.message })
+  }
 }
 
 /**
@@ -34,19 +35,19 @@ const allProduct = async (req, res) => {
  * @returns {Promise<void>} Promesa que resuelve con la respuesta al cliente.
  */
 const productName = async (req, res) => {
-    try {
-        const { name } = req.params
-        const product = await Productos.findOne({ name: { $regex: new RegExp(name, 'i') } });
+  try {
+    const { name } = req.params
+    const product = await Productos.findOne({ name: { $regex: new RegExp(name, 'i') } });
 
-        if (!product) {
-            res.status(400).send("No existe producto con ese nombre")
-            return
-        }
-        res.status(200).send(product)
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+    if (!product) {
+      res.status(400).send("No existe producto con ese nombre")
+      return
     }
+    res.status(200).send(product)
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: error.message })
+  }
 }
 
 /**
@@ -359,46 +360,46 @@ const createProduct = async (req, res) => {
  */
 
 const updateProduct = async (req, res) => {
-    try {
-        const { id } = req.params
-        console.log("hola soy el id", id)
+  try {
+    const { id } = req.params
+    console.log("hola soy el id", id)
 
-        if (!id) {
-            res.status(404).send("No existe producto con ese ID")
-            return
-        }
-        const existingProduct = await Productos.findById(id);
-        if (!existingProduct) {
-            res.status(404).send("No existe producto con ese ID.");
-            return;
-        }
-        const { name, price, image, stock,brand, description } = req.body
-        const updateFields = {};
-        if (name) {
-            updateFields.name = name;
-        }
-        if (price) {
-            updateFields.price = price;
-        }
-        if (brand) {
-            updateFields.brand = brand;
-        }
-        if (image) {
-            updateFields.image = image;
-        }
-        if (stock) {
-            updateFields.stock = stock;
-        }
-        if (description) {
-            updateFields.description = description;
-        }
-        const update = await Productos.findByIdAndUpdate(id, updateFields, { new: true });
-        res.status(200).send(update)
-
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+    if (!id) {
+      res.status(404).send("No existe producto con ese ID")
+      return
     }
+    const existingProduct = await Productos.findById(id);
+    if (!existingProduct) {
+      res.status(404).send("No existe producto con ese ID.");
+      return;
+    }
+    const { name, price, image, stock, brand, description } = req.body
+    const updateFields = {};
+    if (name) {
+      updateFields.name = name;
+    }
+    if (price) {
+      updateFields.price = price;
+    }
+    if (brand) {
+      updateFields.brand = brand;
+    }
+    if (image) {
+      updateFields.image = image;
+    }
+    if (stock) {
+      updateFields.stock = stock;
+    }
+    if (description) {
+      updateFields.description = description;
+    }
+    const update = await Productos.findByIdAndUpdate(id, updateFields, { new: true });
+    res.status(200).send(update)
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: error.message })
+  }
 }
 
 /**
@@ -410,42 +411,42 @@ const updateProduct = async (req, res) => {
  */
 
 const deleteProduct = async (req, res) => {
-    try {
-        const { id } = req.params
-        const product = await Productos.findById(id)
-        console.log("soy el producto a eliminar", product)
-        if (!product) {
-            res.status(404).send("No existe producto con ese Id ")
-            return
-        }
-        const productDelete = await Productos.findByIdAndDelete(product)
-
-        res.status(200).send("Producto Eliminado")
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+  try {
+    const { id } = req.params
+    const product = await Productos.findById(id)
+    console.log("soy el producto a eliminar", product)
+    if (!product) {
+      res.status(404).send("No existe producto con ese Id ")
+      return
     }
+    const productDelete = await Productos.findByIdAndDelete(product)
+
+    res.status(200).send("Producto Eliminado")
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: error.message })
+  }
 }
 const getProductId = async (req, res) => {
-    try {
-        const { id } = req.params
-        if (!id) {
-            res.status(404).send("No existe producto con ese ID")
-            return
-        }
-        const productId = await Productos.findById(id)
-
-        res.status(200).send(productId)
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+  try {
+    const { id } = req.params
+    if (!id) {
+      res.status(404).send("No existe producto con ese ID")
+      return
     }
+    const productId = await Productos.findById(id)
+
+    res.status(200).send(productId)
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: error.message })
+  }
 }
 module.exports = {
-    allProduct,
-    productName,
-    createProduct,
-    updateProduct,
-    deleteProduct,
-    getProductId
+  allProduct,
+  productName,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  getProductId
 }

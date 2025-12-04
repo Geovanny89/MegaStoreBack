@@ -1,18 +1,22 @@
 const Productos = require("../../models/Productos")
 
-const productoUser = async(req,res)=>{
+const productoUser = async (req, res) => {
     try {
-        const allProducts = await Productos.find().populate('tipo');
-        if(!allProducts){
-            res.status(404).send("NO existen productos para mostrar")
-            return
+        const allProducts = await Productos.find()
+            .populate("tipo", "name")
+            .populate("vendedor", "storeName");
+
+        if (!allProducts || allProducts.length === 0) {
+            return res.status(404).send("NO existen productos para mostrar");
         }
-        res.status(200).send(allProducts)
+
+        res.status(200).send(allProducts);
     } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+        console.log(error);
+        res.status(500).json({ message: error.message });
     }
-}
+};
+
 const productxName = async(req,res)=>{
     try {
         const {name}= req.params
@@ -28,30 +32,49 @@ const productxName = async(req,res)=>{
         res.status(500).json({ message: error.message })
     }
 }
+// const productId = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         console.log("ID recibido:", id); // Verificar el ID recibido
+
+//         if (!id) {
+//             res.status(404).send("No existe producto con ese ID");
+//             return;
+//         }
+
+//         // Cambia a findOne
+//         const product = await Productos.findOne({ _id: id });
+//         console.log("Producto encontrado:", product); // Verificar el producto encontrado
+
+//         if (!product) {
+//             res.status(404).send("No existe producto con ese ID");
+//             return;
+//         }
+
+//         res.status(200).send(product);
+//     } catch (error) {
+//         console.error("Error al buscar el producto:", error); // Mejor manejo del error
+//         res.status(500).json({ message: error.message });
+//     }
+// };
 const productId = async (req, res) => {
-    try {
-        const { id } = req.params;
-        console.log("ID recibido:", id); // Verificar el ID recibido
+  try {
+    const { id } = req.params;
 
-        if (!id) {
-            res.status(404).send("No existe producto con ese ID");
-            return;
-        }
+    const product = await Productos.findById(id)
+      .populate("tipo", "name")
+      .populate("vendedor", "storeName");
 
-        // Cambia a findOne
-        const product = await Productos.findOne({ _id: id });
-        console.log("Producto encontrado:", product); // Verificar el producto encontrado
-
-        if (!product) {
-            res.status(404).send("No existe producto con ese ID");
-            return;
-        }
-
-        res.status(200).send(product);
-    } catch (error) {
-        console.error("Error al buscar el producto:", error); // Mejor manejo del error
-        res.status(500).json({ message: error.message });
+      console.log("este es el vendedor " , product);
+    if (!product) {
+      return res.status(404).send("No existe producto con ese ID");
     }
+
+    res.status(200).send(product);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 module.exports ={

@@ -1,5 +1,30 @@
 const User = require("../../models/User");
 
+const getUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validar ID
+    if (!id || id.length !== 24) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    const user = await User.findById(id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.status(200).json(user);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
 const updateUser = async (req, res) => {
     try {
         const { id } = req.params;
@@ -45,6 +70,7 @@ const deleteUser = async(req,res)=>{
     }
 }
 module.exports={
+    getUserById,
     updateUser,
     deleteUser
 }

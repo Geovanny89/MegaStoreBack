@@ -14,9 +14,9 @@ const createCheckoutSession = async (req, res) => {
         currency: 'usd',
         product_data: {
           name: item.product.name,
-          images: [item.product.image]
+          images: item.product.image, // ← Arreglado
         },
-        unit_amount: Math.round(item.price * 100)
+        unit_amount: Math.round(item.product.price * 100), // ← Arreglado
       },
       quantity: item.quantity,
     }));
@@ -32,7 +32,9 @@ const createCheckoutSession = async (req, res) => {
       }
     });
 
-    res.json({ id: session.id });
+    // 🔥 ESTE es el valor correcto para enviar al frontend
+    res.json({ url: session.url });
+
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Error al crear sesión de pago" });

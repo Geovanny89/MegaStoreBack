@@ -10,5 +10,5 @@ const {
 
 router.post("/favorite/:productId", auth, AgregarFavorito);
 router.delete("/favoriteDelete/:productId", auth, EliminarFavorito);
-router.get("/favorito/all",auth, verFavoritos);
+router.get("/favorito/all", verFavoritos);
 module.exports = router;

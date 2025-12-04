@@ -46,6 +46,7 @@ app.use((req, res, next) => {
   );
   next();
 });
+console.log("Servidor inicializado. Esperando webhooks en /api/webhook/stripe");
 
 /* -------------------------------------------------------------------------- */
 /*                            4. COOKIE + ROUTES                              */
@@ -74,3 +75,67 @@ require('./database/db.js');
 const createAdmin = require('./utils/createAdmin');
 createAdmin();
 seedPlanes();
+
+// require('dotenv').config();
+// const express = require("express");
+// const cors = require('cors'); 
+// const cookieParser = require("cookie-parser");
+
+// const seedPlanes = require('./seed/seedPlanes.js');
+// const stripeRoutes = require('./routes/User/stripe.js');
+// const stripeWebhookHandler = require('./webhooks/stripeWebhook');
+// const { JWT_SECRET } = process.env;
+
+// const app = express();
+
+// /* --------------------------------------------- */
+// /*      1. WEBHOOK PRIMERO Y SIN JSON PARSER     */
+// /* --------------------------------------------- */
+// app.post(
+//   '/api/webhook/stripe',
+//   express.raw({ type: 'application/json' }),
+//   stripeWebhookHandler
+// );
+
+
+// // urlencoded normal
+// app.use(express.urlencoded({ extended: true }));
+
+// /* --------------------------------------------- */
+// /*                     3. CORS                   */
+// /* --------------------------------------------- */
+// app.use(cors({
+//   origin: '*',
+//   methods: "GET,POST,PUT,DELETE",
+//   credentials: true,
+//   allowedHeaders: ['Content-Type', 'x-user-session','Authorization']
+// }));
+
+// /* --------------------------------------------- */
+// /*           4. COOKIES + RUTAS NORMALES         */
+// /* --------------------------------------------- */
+// app.use(cookieParser(JWT_SECRET));
+
+// // rutas stripe (checkout)
+// app.use('/api/stripe', stripeRoutes);
+
+// // rutas generales
+// app.use('/api', require('./routes/index.js'));
+
+// /* --------------------------------------------- */
+// /*                 5. INICIO SERVER              */
+// /* --------------------------------------------- */
+// const PORT = process.env.PORT || 3001;
+
+// app.listen(PORT, () => {
+//   console.log(`Servidor escuchando en ${PORT}`);
+//   console.log("Webhook funcionando: /api/webhook/stripe");
+// });
+
+// /* --------------------------------------------- */
+// /*             6. DATABASE + ADMIN               */
+// /* --------------------------------------------- */
+// require('./database/db.js');
+// const createAdmin = require('./utils/createAdmin');
+// createAdmin();
+// seedPlanes();

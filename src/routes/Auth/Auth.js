@@ -7,4 +7,4 @@ const router= express();
 router.post('/register',validateRegister, register)
 router.post('/login', validateLogin,login)
 
-module.exports=router
+module.exports=router 

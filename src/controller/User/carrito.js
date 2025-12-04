@@ -4,17 +4,27 @@ const Producto = require('../../models/Productos');
 // ========================
 // VER PRODUCTOS EN CARRITO
 // ========================
-
 const verProductosEnCarrito = async (req, res) => {
-  const userId= req.user.id;
- try {
-    const car = await Carrito.find({user :userId}).populate('items.product')
-    res.json(car)
- } catch (error) {
-  console.error(error);
-    res.status(500).json({ message: 'Error retrieving banners.' });
- }
-}
+  try {
+    const userId = req.user._id;
+    const carrito = await Carrito.findOne({ user: userId }).populate('items.product');
+
+    // Si el carrito no existe → devolver vacío con 200
+    if (!carrito) {
+      return res.status(200).json({ items: [] });
+    }
+
+    // Filtrar productos eliminados
+    const itemsLimpios = carrito.items.filter(item => item.product !== null);
+
+    return res.status(200).json({ items: itemsLimpios });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving carrito." });
+  }
+};
+
+
 
 // ========================
 // AGREGAR PRODUCTO AL CARRITO
@@ -23,52 +33,52 @@ const verProductosEnCarrito = async (req, res) => {
 // Controlador para agregar un producto al carrito
 const agregarProductoAlCarrito = async (req, res) => {
   try {
-    const { productId, quantity } = req.body;
-    console.log(req.body)
+    let { productId, quantity } = req.body;
 
-    if (!productId || !quantity) {
-      return res.status(400).json({ error: 'Debes proporcionar el ID del producto y la cantidad' });
+    console.log(req.body);
+
+    // convertir a número
+    quantity = Number(quantity);
+
+    if (!productId || !quantity || quantity <= 0) {
+      return res.status(400).json({ error: "Datos inválidos" });
     }
 
-    // Verificar si el producto existe
     const product = await Producto.findById(productId);
     if (!product) {
-      return res.status(404).json({ error: 'Producto no encontrado' });
+      return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    // Obtener el ID del usuario desde el objeto 'user' añadido por el middleware
     const userId = req.user._id;
 
-    // Buscar el carrito del usuario (puedes ajustar esto según tu lógica de usuario)
     let carrito = await Carrito.findOne({ user: userId });
 
-    // Si el carrito no existe, crear uno nuevo
     if (!carrito) {
       carrito = new Carrito({ user: userId, items: [] });
     }
 
-    // Verificar si el producto ya está en el carrito
-    const existingItem = carrito.items.find(item => item.product.toString() === productId.toString());
-
+    const existingItem = carrito.items.find(
+      (item) => item.product.toString() === productId.toString()
+    );
 
     if (existingItem) {
-      // Si el producto ya está en el carrito, actualizar la cantidad
       existingItem.quantity += quantity;
     } else {
-      // Si el producto no está en el carrito, agregarlo
       carrito.items.push({
         product: productId,
-        quantity: quantity,
+        quantity,
       });
     }
 
-    // Guardar el carrito actualizado
     await carrito.save();
 
-    res.status(201).json({ message: 'Producto agregado al carrito exitosamente' });
+    return res
+      .status(201)
+      .json({ message: "Producto agregado al carrito exitosamente" });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
 
