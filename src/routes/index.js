@@ -14,6 +14,9 @@ const address = require('./User/Address')
 const question= require('./Questions/productQuestionRoutes')
 const suscripciones = require('./User/suscripciones')
 const planes = require('./Planes/planes')   
+const vendedor = require('./Seller/vendedor')
+const vendedorProductos= require("./Seller/productos.vendedor")
+const orders = require('./Admin/Orders')
 
 
 const router = express();
@@ -33,6 +36,9 @@ router.use(address)
 router.use(question)
 router.use(suscripciones)
 router.use(planes)
+router.use(vendedor)
+router.use(vendedorProductos)
+router.use(orders)
 
 
 

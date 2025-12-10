@@ -1,39 +1,54 @@
-// const express = require("express");
-// const authMiddleware = require("../../middleware/sesion");
-// const checkRol = require("../../middleware/rol");
+const express = require("express");
+const router = express.Router();
 
-// const {getSellerOrders,getAllOrders,updateOrderStatus} = require("../../controller/Admin/order.controller");
+const authMiddleware = require("../../middleware/sesion");
+const checkRol = require("../../middleware/rol");
 
-// const router = express.Router();
+const {
+  getSellerOrders,
+  markOrderProcessing,
+  markOrderShipped,
+  markOrderDelivered,
+} = require("../../controller/Admin/order.controller");
 
+/* ============================================================
+   RUTAS PARA VENDEDOR
+   ============================================================ */
 
+// Obtener todas las órdenes del vendedor
+router.get(
+  "/seller/orders",
+  authMiddleware,
+  checkRol(["seller"]),
+  getSellerOrders
+);
 
-// /* =====================================================
-//    RUTAS PARA EL VENDEDOR
-//    ===================================================== */
+// Marcar orden como "processing"
+router.put(
+  "/seller/orders/:orderId/processing",
+  authMiddleware,
+  checkRol(["seller"]),
+  markOrderProcessing
+);
 
-// // Ver órdenes donde el producto le pertenece al vendedor
-// router.get("/seller-orders",authMiddleware,checkRol(["seller", "admin"]),getSellerOrders);
+// Marcar orden como "shipped"
+router.put(
+  "/seller/orders/:orderId/shipped",
+  authMiddleware,
+  checkRol(["seller"]),
+  markOrderShipped
+);
 
+/* ============================================================
+   RUTAS PARA COMPRADOR
+   ============================================================ */
 
-// /* =====================================================
-//    RUTAS PARA EL ADMINISTRADOR
-//    ===================================================== */
+// Confirmar entrega de la orden ("delivered")
+router.put(
+  "/buyer/orders/:orderId/delivered",
+  authMiddleware,
+  checkRol(["user"]),
+  markOrderDelivered
+);
 
-// // Ver todas las órdenes del sistema
-// router.get(
-//   "/",
-//   authMiddleware,
-//   checkRol(["admin"]),
-//   getAllOrders
-// );
-
-// // Cambiar estado de cualquier orden
-// router.patch(
-//   "/status/:id",
-//   authMiddleware,
-//   checkRol(["admin", "seller"]),
-//   updateOrderStatus
-// );
-
-// module.exports = router;
+module.exports = router;
