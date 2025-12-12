@@ -20,7 +20,16 @@ const userSchema = mongoose.Schema({
     phone: {
         type: String
     },
-      // varias direcciones
+    resetPasswordToken: {
+        type: String,
+        default: null
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null
+    },
+
+    // varias direcciones
     addresses: [addressSchema],
     rol: {
         type: String,
@@ -30,6 +39,10 @@ const userSchema = mongoose.Schema({
 
     // solo sellers usan este campo
     storeName: {
+        type: String,
+        default: null
+    },
+    storeLogo: {
         type: String,
         default: null
     },

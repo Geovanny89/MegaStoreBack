@@ -17,6 +17,7 @@ const planes = require('./Planes/planes')
 const vendedor = require('./Seller/vendedor')
 const vendedorProductos= require("./Seller/productos.vendedor")
 const orders = require('./Admin/Orders')
+const vendedorid = require('./User/vendedorId')
 
 
 const router = express();
@@ -39,6 +40,7 @@ router.use(planes)
 router.use(vendedor)
 router.use(vendedorProductos)
 router.use(orders)
+router.use(vendedorid)
 
 
 

@@ -3,7 +3,7 @@ const { allUser, updateUser, deleteUser } = require('../../controller/Admin/user
 const authMiddleware = require('../../middleware/sesion');
 const checkRol = require('../../middleware/rol');
 
-const router = express();
+const router = express.Router();  
 
 router.get('/all/admin/user',authMiddleware,checkRol(["admin"]),allUser)
 router.put('/user/admin/update/:id',authMiddleware,checkRol(["admin"]),updateUser)
