@@ -42,7 +42,7 @@ const userSchema = mongoose.Schema({
         type: String,
         default: null
     },
-    storeLogo: {
+    image: {
         type: String,
         default: null
     },

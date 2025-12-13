@@ -11,7 +11,7 @@ const router = express();
 router.get('/allProduct',authMiddleware,allProduct);
 router.get('/:name',authMiddleware,productName);
 router.get('/product/:id',getProductId)
-router.post('/create', authMiddleware, upload.array('image', 7), checkRol(["admin","seller"]), createProduct);
+router.post('/create', authMiddleware, upload.array('image', 5), checkRol(["admin","seller"]), createProduct);
 router.put('/update/:id',authMiddleware,checkRol(["admin","seller"]),updateProduct)
 router.delete('/delete/:id',authMiddleware,checkRol(["admin","seller"]),deleteProduct)
 

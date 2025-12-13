@@ -6,9 +6,7 @@ const { encrypt, compare } = require('../../utils/handlePassword');
 const { tokenSign } = require('../../utils/handleJwt');
 const { transporter, mailDetails } = require('../../mailer/nodemailer');
 const crypto = require("crypto");
-
-
-
+const cloudinary = require("../../utils/cloudinary");
 
 const register = async (req, res) => {
   try {
@@ -22,9 +20,10 @@ const register = async (req, res) => {
 
     const hashedPassword = await encrypt(data.password);
 
-    // 👉 Si quiere ser seller, validar campos obligatorios
     let plan = null;
+    let storeLogoUrl = null;
 
+    // 👉 VALIDACIONES SELLER
     if (data.rol === "seller") {
 
       if (!data.storeName) {
@@ -35,27 +34,44 @@ const register = async (req, res) => {
         return res.status(400).json({ error: "Debes seleccionar un plan para registrarte como seller" });
       }
 
-      // validar plan por ID
-      plan = await Planes.findOne({ _id: data.planId, estado: "activo" });
+      if (!req.file) {
+        return res.status(400).json({ error: "El logo de la tienda es obligatorio" });
+      }
 
+      plan = await Planes.findOne({ _id: data.planId, estado: "activo" });
       if (!plan) {
         return res.status(404).json({ error: "El plan seleccionado no existe o está inactivo" });
       }
+
+      // 🔥 SUBIR LOGO A CLOUDINARY (MISMO MÉTODO QUE PRODUCTOS)
+      storeLogoUrl = await new Promise((resolve, reject) => {
+        const upload = cloudinary.uploader.upload_stream(
+          { folder: "store_logos" },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result.secure_url);
+          }
+        );
+        upload.end(req.file.buffer);
+      });
     }
 
-    // crear usuario
+    // 👉 CREAR USUARIO
     const newUser = new User({
       ...data,
-      password: hashedPassword
+      password: hashedPassword,
+      image: storeLogoUrl // 👈 logo guardado aquí
     });
 
     await newUser.save();
 
-    // 👉 Si es seller, crear suscripción automáticamente
+    // 👉 CREAR SUSCRIPCIÓN SI ES SELLER
     if (data.rol === "seller") {
       const fechaInicio = new Date();
       const fechaVencimiento = new Date();
-      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + plan.duracion_meses);
+      fechaVencimiento.setMonth(
+        fechaVencimiento.getMonth() + plan.duracion_meses
+      );
 
       await Suscripciones.create({
         id_usuario: newUser._id,
@@ -66,7 +82,7 @@ const register = async (req, res) => {
       });
     }
 
-    // enviar email
+    // 👉 ENVIAR EMAIL
     const welcomeEmail = mailDetails(newUser.email, newUser.name);
     await transporter.sendMail(welcomeEmail);
 
@@ -78,9 +94,12 @@ const register = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error al registrar el usuario' });
+    res.status(500).json({ message: "Error al registrar el usuario" });
   }
 };
+
+
+
 
 const login = async (req, res) => {
   try {

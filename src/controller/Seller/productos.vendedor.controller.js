@@ -114,53 +114,94 @@ const updateSellerProduct = async (req, res) => {
     const { id } = req.params;
     const sellerId = req.user.id;
 
-    const product = await Productos.findOne({ _id: id, vendedor: sellerId });
-    if (!product)
-      return res.status(404).json({ message: "Producto no encontrado o no es tuyo" });
+    const product = await Productos.findOne({
+      _id: id,
+      vendedor: sellerId
+    });
 
-    const { existingImages } = req.body;
+    if (!product) {
+      return res
+        .status(404)
+        .json({ message: "Producto no encontrado o no es tuyo" });
+    }
+
+    /* ================= IMÁGENES ================= */
+
     let imagesArray = [];
 
-    if (existingImages) {
-      imagesArray = JSON.parse(existingImages); // imágenes que no eliminaste
+    // Imágenes existentes que el seller decidió mantener
+    if (req.body.existingImages) {
+      try {
+        imagesArray = JSON.parse(req.body.existingImages);
+      } catch {
+        return res
+          .status(400)
+          .json({ message: "Formato inválido de existingImages" });
+      }
+    }
+
+    const newImagesCount = req.files ? req.files.length : 0;
+    const totalImages = imagesArray.length + newImagesCount;
+
+    if (totalImages > 5) {
+      return res.status(400).json({
+        message: "Máximo 5 imágenes por producto"
+      });
     }
 
     // Subir nuevas imágenes a Cloudinary
     if (req.files && req.files.length > 0) {
-  for (const file of req.files) {
-    const uploaded = await new Promise((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        { folder: "productos_tienda" },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result);
-        }
+      const uploadedImages = await Promise.all(
+        req.files.map(
+          file =>
+            new Promise((resolve, reject) => {
+              const stream = cloudinary.uploader.upload_stream(
+                { folder: "productos_tienda" },
+                (error, result) => {
+                  if (error) reject(error);
+                  else resolve(result.secure_url);
+                }
+              );
+              stream.end(file.buffer);
+            })
+        )
       );
-      stream.end(file.buffer);
-    });
-    imagesArray.push(uploaded.secure_url);
-  }
-}
 
+      imagesArray.push(...uploadedImages);
+    }
 
-    product.name = req.body.name;
-    product.price = req.body.price;
-    product.brand = req.body.brand;
-    product.tipo = req.body.tipoId;
-    product.color = req.body.color ? req.body.color.split(",").map(c => c.trim()) : [];
-    product.sise = req.body.sise ? req.body.sise.split(",").map(s => s.trim()) : [];
-    product.stock = req.body.stock;
-    product.description = req.body.description;
+    /* ================= CAMPOS ================= */
+
+    product.name = req.body.name ?? product.name;
+    product.price = req.body.price ?? product.price;
+    product.brand = req.body.brand ?? product.brand;
+    product.tipo = req.body.tipoId ?? product.tipo;
+    product.stock = req.body.stock ?? product.stock;
+    product.description = req.body.description ?? product.description;
+
+    product.color = req.body.color
+      ? req.body.color.split(",").map(c => c.trim())
+      : product.color;
+
+    product.sise = req.body.sise
+      ? req.body.sise.split(",").map(s => s.trim())
+      : product.sise;
+
     product.image = imagesArray;
 
     await product.save();
 
-    res.json({ message: "Producto actualizado correctamente", product });
+    res.json({
+      message: "Producto actualizado correctamente",
+      product
+    });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Error al actualizar producto" });
   }
 };
+
 
 
 

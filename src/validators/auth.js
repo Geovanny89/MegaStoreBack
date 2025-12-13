@@ -15,8 +15,23 @@ const validateRegister = [
     check("email").exists().notEmpty().isEmail(),
     check("password").exists().notEmpty().isLength({ min: 8, max: 15 }),
     check("phone").exists().notEmpty(), // Agrega la validación para el campo phone
-    check("addresses").exists().notEmpty(), // Agrega la validación para el campo adress
+    // check("addresses").exists().notEmpty(), // Agrega la validación para el campo adress
     check("rol").exists().notEmpty().isIn(["user", "seller"]),
+    check("addresses[0][street]")
+    .exists()
+    .notEmpty()
+    .withMessage("La calle es obligatoria"),
+
+  check("addresses[0][city]")
+    .exists()
+    .notEmpty()
+    .withMessage("La ciudad es obligatoria"),
+
+  check("addresses[0][country]")
+    .exists()
+    .notEmpty()
+    .withMessage("El país es obligatorio"),
+
     // ✔ storeName solo obligatorio si es seller
     body("storeName")
         .if(body("rol").equals("seller"))

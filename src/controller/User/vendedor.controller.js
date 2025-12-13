@@ -5,7 +5,7 @@ const vendedor = async (req, res) => {
   try {
     // Filtrar solo usuarios con rol "seller"
     const vendedorAll = await User.find({ rol: "seller" })
-      .select("storeName storeLogo email phone rol");
+      .select("storeName storeLogo email phone rol image");
 
     if (!vendedorAll || vendedorAll.length === 0) {
       return res.status(404).json({ message: "No existen vendedores" });
@@ -22,7 +22,7 @@ const vendedor = async (req, res) => {
 const vendedorById = async (req, res) => {
  try {
     const vendor = await User.findById(req.params.id)
-      .select("storeName storeLogo email phone ");
+      .select("storeName image  ");
 
     if (!vendor) {
       return res.status(404).json({ message: "Vendedor no encontrado" });
