@@ -1,32 +1,29 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-const JWT_SECRET = process.env.JWT_SECRET
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
+const JWT_SECRET = process.env.JWT_SECRET;
 
-const tokenSign = async (user) => {
-    const sing = jwt.sign(
+const tokenSign = (user) => {
+    return jwt.sign(
         {
             id: user.id,
             rol: user.rol
         },
         JWT_SECRET,
         {
-            expiresIn:"2h"
+            expiresIn: "2h"
         }
-    )
-    return sing
-}
+    );
+};
 
-const verifyToken = async (tokenJwt) => {
-    try {
-        return jwt.verify(tokenJwt, JWT_SECRET);
-    } catch (error) {
-        console.error('Error al verificar el token:', error.message);
-        return null;
-    }
-}
+// 🔴 NO async
+// 🔴 NO try/catch
+// 🔴 NO console.log
+const verifyToken = (tokenJwt) => {
+    return jwt.verify(tokenJwt, JWT_SECRET);
+};
 
 module.exports = {
     tokenSign,
     verifyToken
-}
+};

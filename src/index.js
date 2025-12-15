@@ -30,7 +30,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 /* -------------------------------------------------------------------------- */
 app.use(cors({
   origin: '*',
-  methods: "GET,POST,PUT,DELETE",
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'x-user-session','Authorization']
 }));

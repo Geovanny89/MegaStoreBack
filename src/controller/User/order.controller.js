@@ -3,6 +3,7 @@ const Order = require('../../models/Order');
 const Productos = require('../../models/Productos');
 const User = require('../../models/User');
 const { transporter, mailDetails } = require("../../mailer/nodemailer"); // nodemailer
+const Notification = require('../../models/Notification');
 
 
 const getMyOrders = async (req, res) => {
@@ -61,126 +62,157 @@ const getMyOrders = async (req, res) => {
 // };
 
 
-
-
 const createOrder = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const userEmail = req.user.email;
-        const userName = req.user.name || "Cliente";
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    const userName = req.user.name || "Cliente";
 
-        const { products, shippingAddress } = req.body;
+    const {
+      products,
+      shippingAddress,
+      deliveryMethod,
+      paymentMethod
+    } = req.body;
 
-        if (!products || products.length === 0) {
-            return res.status(400).json({ message: "No hay productos para procesar la orden." });
-        }
+    /* ================= VALIDACIONES ================= */
 
-        if (!shippingAddress) {
-            return res.status(400).json({ message: "La dirección de envío es obligatoria." });
-        }
-
-        let total = 0;
-        const orderProducts = [];
-
-        for (const item of products) {
-            const product = await Productos.findById(item.productId);
-
-            if (!product) {
-                return res.status(404).json({ message: `Producto no encontrado ID: ${item.productId}` });
-            }
-
-            total += product.price * item.quantity;
-
-            orderProducts.push({
-                product: product._id,
-                quantity: item.quantity,
-                price: product.price,
-                seller: product.vendedor // ← CAMBIO AQUÍ
-            });
-        }
-
-        // Crear orden
-        const newOrder = await Order.create({
-            user: userId,
-            products: orderProducts,
-            shippingAddress,
-            total,
-            status: "pending"
-        });
-
-        // =============================================
-        // EMAIL AL CLIENTE
-        // =============================================
-
-        const productListHTML = orderProducts
-            .map(
-                (item) => `
-                <li>${item.quantity} x Producto ID: ${item.product} – $${item.price}</li>
-            `
-            )
-            .join("");
-
-        await transporter.sendMail({
-            from: "pruebadesarrollo2184@gmail.com",
-            to: userEmail,
-            subject: `Confirmación de tu compra – Orden #${newOrder._id}`,
-            html: `
-                <h2>Gracias por tu compra, ${userName}</h2>
-                <p>Tu orden fue registrada exitosamente.</p>
-
-                <h3>Detalles:</h3>
-                <ul>${productListHTML}</ul>
-
-                <p><strong>Total pagado:</strong> $${newOrder.total}</p>
-                <p>Estado: Pendiente</p>
-            `
-        });
-
-        // =============================================
-        // EMAIL A LOS VENDEDORES
-        // =============================================
-
-        for (const item of orderProducts) {
-            console.log("ITEM SELLER:", item.seller); // debug
-            const sellerUser = await User.findById(item.seller);
-
-            if (!sellerUser) {
-                console.log(`Vendedor no encontrado – ID: ${item.seller}`);
-                continue;
-            }
-
-            await transporter.sendMail({
-                from: "pruebadesarrollo2184@gmail.com",
-                to: sellerUser.email,
-                subject: `Nueva venta registrada – Orden #${newOrder._id}`,
-                html: `
-                    <h2>Has recibido una nueva venta</h2>
-
-                    <h3>Producto vendido:</h3>
-                    <ul>
-                        <li>${item.quantity} x Producto ID: ${item.product}</li>
-                        <li>Precio: $${item.price}</li>
-                    </ul>
-
-                    <p><strong>Total recibido por este producto:</strong> $${item.price * item.quantity}</p>
-
-                    <h3>Datos del comprador:</h3>
-                    <p>${userName} – ${userEmail}</p>
-                `
-            });
-        }
-
-        return res.status(201).json({
-            message: "Orden creada exitosamente",
-            order: newOrder
-        });
-
-    } catch (error) {
-        console.error("Error al crear la orden:", error);
-        return res.status(500).json({ message: "Error interno al crear la orden." });
+    if (!products || products.length === 0) {
+      return res.status(400).json({ message: "No hay productos para procesar la orden." });
     }
-};
 
+    if (!deliveryMethod) {
+      return res.status(400).json({ message: "El método de entrega es obligatorio." });
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "El método de pago es obligatorio." });
+    }
+
+    if (deliveryMethod === "delivery" && !shippingAddress) {
+      return res.status(400).json({
+        message: "La dirección de envío es obligatoria para entrega a domicilio."
+      });
+    }
+
+    // Reglas de negocio
+    if (deliveryMethod === "pickup" && paymentMethod === "cash") {
+      return res.status(400).json({
+        message: "No puedes pagar en efectivo si recoges en tienda."
+      });
+    }
+
+    if (deliveryMethod === "delivery" && paymentMethod === "pay_in_store") {
+      return res.status(400).json({
+        message: "No puedes pagar en tienda si el envío es a domicilio."
+      });
+    }
+
+    /* ================= PROCESAR PRODUCTOS ================= */
+
+    let total = 0;
+    const orderProducts = [];
+
+    for (const item of products) {
+      const product = await Productos.findById(item.productId);
+
+      if (!product) {
+        return res.status(404).json({
+          message: `Producto no encontrado ID: ${item.productId}`
+        });
+      }
+
+      total += product.price * item.quantity;
+
+      orderProducts.push({
+        product: product._id,
+        productName: product.name,
+        quantity: item.quantity,
+        price: product.price,
+        seller: product.vendedor
+      });
+    }
+
+    /* ================= CREAR ORDEN ================= */
+
+    const newOrder = await Order.create({
+      user: userId,
+      products: orderProducts,
+      deliveryMethod,
+      paymentMethod,
+      shippingAddress: deliveryMethod === "delivery" ? shippingAddress : null,
+      total,
+      status: "pending"
+    });
+
+    /* ================= EMAIL CLIENTE ================= */
+
+    await transporter.sendMail({
+      from: "pruebadesarrollo2184@gmail.com",
+      to: userEmail,
+      subject: `Confirmación de compra – Orden #${newOrder._id}`,
+      html: `
+        <h2>Gracias por tu compra, ${userName}</h2>
+        <p><strong>Orden:</strong> ${newOrder._id}</p>
+        <p><strong>Total:</strong> $${newOrder.total}</p>
+        <p><strong>Entrega:</strong> ${deliveryMethod}</p>
+        <p><strong>Pago:</strong> ${paymentMethod}</p>
+        <p><strong>Estado:</strong> Pendiente</p>
+      `
+    });
+
+    /* ================= NOTIFICAR SELLERS ================= */
+
+    const sellerIds = [
+      ...new Set(
+        orderProducts
+          .map(p => p.seller)
+          .filter(Boolean)
+          .map(id => id.toString())
+      )
+    ];
+
+    const sellers = await User.find({ _id: { $in: sellerIds } });
+
+    for (const seller of sellers) {
+      // Guardar notificación
+      await Notification.create({
+        user: seller._id,
+        order: newOrder._id,
+        message: `Nueva orden recibida (#${newOrder._id})`
+      });
+
+      // Email seller
+      if (seller.email) {
+        await transporter.sendMail({
+          from: "pruebadesarrollo2184@gmail.com",
+          to: seller.email,
+          subject: "📦 Nueva orden recibida",
+          html: `
+            <h2>Has recibido una nueva orden</h2>
+            <p><strong>Orden:</strong> ${newOrder._id}</p>
+            <p><strong>Total:</strong> $${newOrder.total}</p>
+            <p><strong>Entrega:</strong> ${deliveryMethod}</p>
+            <p><strong>Pago:</strong> ${paymentMethod}</p>
+          `
+        });
+      }
+    }
+
+    /* ================= RESPUESTA ================= */
+
+    return res.status(201).json({
+      message: "Orden creada exitosamente",
+      order: newOrder
+    });
+
+  } catch (error) {
+    console.error("Error al crear la orden:", error);
+    return res.status(500).json({
+      message: "Error interno al crear la orden."
+    });
+  }
+};
 
 
 

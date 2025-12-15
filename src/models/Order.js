@@ -1,16 +1,24 @@
 const mongoose = require("mongoose");
 
+
 const orderSchema = new mongoose.Schema({
   products: [
     {
       product: { type: mongoose.Schema.Types.ObjectId, ref: "Productos", required: true },
+      productName: String,
       quantity: { type: Number, required: true },
-      price: { type: Number, required: true }, // precio congelado
-      seller: { type: mongoose.Schema.Types.ObjectId, ref: "User" } // si quieres marketplace
+      price: { type: Number, required: true },
+      seller: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
     }
   ],
 
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+  deliveryMethod: {
+    type: String,
+    enum: ["delivery", "pickup", "cash_on_delivery"],
+    required: true
+  },
 
   shippingAddress: {
     street: String,
@@ -18,6 +26,14 @@ const orderSchema = new mongoose.Schema({
     state: String,
     country: String,
     postalCode: String
+  },
+
+  pickupStore: {
+    storeName: String,
+    address: {
+      street: String,
+      city: String
+    }
   },
 
   total: { type: Number, required: true },
@@ -30,5 +46,4 @@ const orderSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now }
 });
-
 module.exports = mongoose.model("Order", orderSchema);

@@ -33,7 +33,7 @@ const productosSchema = mongoose.Schema({
         type: Schema.Types.ObjectId, 
         ref: 'TipoProductos',
         required: true 
-    },
+    }, 
     vendedor: {
   type: Schema.Types.ObjectId,
   ref: "User",
