@@ -1,40 +1,52 @@
-const { default: mongoose } = require("mongoose");
-const { mailDetails, transporter } = require("../../mailer/nodemailer");
+const mongoose = require("mongoose");
+const { transporter } = require("../../mailer/nodemailer");
 const Order = require("../../models/Order");
+const Notification = require("../../models/Notification");
+
+/* ============================================================
+   UTIL: crear o actualizar notificación de orden
+============================================================ */
+const upsertOrderNotification = async ({ userId, order, message }) => {
+  await Notification.findOneAndUpdate(
+    { user: userId, order: order._id },
+    {
+      message,
+      status: order.status,
+      isRead: false
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  );
+};
 
 /* ============================================================
    1. VENDEDOR: Ver solo sus órdenes
-   ============================================================ */
-
+============================================================ */
 const getSellerOrders = async (req, res) => {
   try {
     const sellerId = new mongoose.Types.ObjectId(req.user.id);
 
     const orders = await Order.aggregate([
-      // 1) Filtrar órdenes que tienen al menos un producto de este seller
       { $match: { "products.seller": sellerId } },
-
-      // 2) Traer detalles de los productos referenciados en la orden
       {
         $lookup: {
-          from: "productos", // revisa el nombre de la colección si es distinto
+          from: "productos",
           localField: "products.product",
           foreignField: "_id",
           as: "productDetails"
         }
       },
-
-      // 3) Traer datos del usuario comprador
       {
         $lookup: {
-          from: "users", // revisa el nombre de la colección de usuarios si es distinto
+          from: "users",
           localField: "user",
           foreignField: "_id",
           as: "userDetails"
         }
       },
-
-      // 4) Filtrar products para quedarse solo con los del seller y "enriquecer" con productDetails
       {
         $addFields: {
           products: {
@@ -66,12 +78,9 @@ const getSellerOrders = async (req, res) => {
               }
             }
           },
-          // traer user como objeto en lugar de array
           user: { $arrayElemAt: ["$userDetails", 0] }
         }
       },
-
-      // 5) Limpiar campos que ya no necesitamos
       {
         $project: {
           productDetails: 0,
@@ -87,12 +96,9 @@ const getSellerOrders = async (req, res) => {
   }
 };
 
-module.exports = { getSellerOrders };
-
-
 /* ============================================================
-   2. VENDEDOR: Poner orden en Processing
-   ============================================================ */
+   2. VENDEDOR: Marcar orden en PROCESSING
+============================================================ */
 const markOrderProcessing = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -104,79 +110,79 @@ const markOrderProcessing = async (req, res) => {
     });
 
     if (!order) {
-      return res.status(404).json({ message: "Orden no encontrada para este vendedor" });
+      return res.status(404).json({ message: "Orden no encontrada" });
     }
 
     if (order.status !== "paid") {
-      return res.status(400).json({ message: "La orden debe estar paga para procesarse." });
+      return res.status(400).json({ message: "La orden debe estar paga" });
     }
 
     order.status = "processing";
     await order.save();
 
-    res.json({ message: "Orden marcada como en procesamiento", order });
+    await upsertOrderNotification({
+      userId: order.user,
+      order,
+      message: `Tu pedido #${order._id} está en preparación.`
+    });
+
+    res.json({ message: "Orden en procesamiento", order });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar orden." });
+    console.error(error);
+    res.status(500).json({ message: "Error al actualizar orden" });
   }
 };
 
 /* ============================================================
-   3. VENDEDOR: Marcar como Shipped
-   ============================================================ */
+   3. VENDEDOR: Marcar orden como SHIPPED
+============================================================ */
 const markOrderShipped = async (req, res) => {
   try {
     const { orderId } = req.params;
     const sellerId = req.user.id;
 
-    // Buscar orden que incluya este vendedor
     const order = await Order.findOne({
       _id: orderId,
       "products.seller": sellerId
     })
-      .populate("user")          // comprador
-      .populate("products.product"); // información de productos
+      .populate("user")
+      .populate("products.product");
 
     if (!order) {
-      return res.status(404).json({ message: "Orden no encontrada para este vendedor" });
+      return res.status(404).json({ message: "Orden no encontrada" });
     }
 
     if (order.status !== "processing") {
-      return res.status(400).json({ message: "La orden debe estar en procesamiento." });
+      return res.status(400).json({ message: "La orden debe estar en procesamiento" });
     }
 
-    // Actualizar estado
     order.status = "shipped";
     await order.save();
 
-    // Preparar lista de productos en HTML
-    const productListHTML = order.products
-      .map(p => `<li>${p.product.name} x ${p.quantity} - $${p.price}</li>`)
-      .join("");
-
-    // Enviar correo al comprador
+    // 📧 Email
     await transporter.sendMail({
       from: "pruebadesarrollo2184@gmail.com",
-      to: order.user.email, // correo del comprador
-      subject: `Tu pedido ha sido enviado - Orden #${order._id}`,
-      html: `
-        <h2>¡Tu pedido ha sido enviado, ${order.user.name}!</h2>
-        <p>Tu orden está en camino. Aquí tienes los detalles:</p>
-        <ul>${productListHTML}</ul>
-        <p><strong>Total pagado:</strong> $${order.total}</p>
-        <p>Estado actual: Enviado</p>
-      `
+      to: order.user.email,
+      subject: `Pedido enviado - Orden #${order._id}`,
+      html: `<p>Tu pedido ha sido enviado.</p>`
     });
 
-    res.json({ message: "Orden marcada como enviada y correo enviado al comprador", order });
+    await upsertOrderNotification({
+      userId: order.user._id,
+      order,
+      message: `Tu pedido #${order._id} fue enviado.`
+    });
+
+    res.json({ message: "Orden enviada", order });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error al actualizar orden o enviar correo." });
+    res.status(500).json({ message: "Error al enviar orden" });
   }
 };
 
 /* ============================================================
-   4. COMPRADOR: Confirmar Delivered
-   ============================================================ */
+   4. COMPRADOR: Confirmar DELIVERED
+============================================================ */
 const markOrderDelivered = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -185,30 +191,55 @@ const markOrderDelivered = async (req, res) => {
     const order = await Order.findOne({
       _id: orderId,
       user: buyerId
-    });
+    }).populate("products.seller");
 
     if (!order) {
-      return res.status(404).json({ message: "Orden no encontrada para este comprador" });
+      return res.status(404).json({ message: "Orden no encontrada" });
     }
 
     if (order.status !== "shipped") {
-      return res.status(400).json({ message: "La orden debe estar enviada para confirmarse." });
+      return res.status(400).json({ message: "La orden debe estar enviada" });
     }
 
+    // 🔄 Cambiar estado
     order.status = "delivered";
     await order.save();
 
-    console.log("Liberar dinero al vendedor");
+    // ============================
+    // NOTIFICACIÓN AL COMPRADOR
+    // ============================
+    await upsertOrderNotification({
+      userId: order.user,
+      order,
+      message: `Confirmaste la entrega del pedido #${order._id}.`
+    });
 
-    res.json({ message: "Orden marcada como entregada", order });
+    // ============================
+    // NOTIFICACIÓN A VENDEDORES
+    // ============================
+    const sellerIds = [
+      ...new Set(order.products.map(p => p.seller.toString()))
+    ];
+
+    for (const sellerId of sellerIds) {
+      await upsertOrderNotification({
+        userId: sellerId,
+        order,
+        message: `El comprador confirmó la entrega del pedido #${order._id}.`
+      });
+    }
+
+    res.json({ message: "Orden entregada", order });
   } catch (error) {
-    res.status(500).json({ message: "Error al actualizar orden." });
+    console.error(error);
+    res.status(500).json({ message: "Error al confirmar entrega" });
   }
 };
+
 
 module.exports = {
   getSellerOrders,
   markOrderProcessing,
   markOrderShipped,
-  markOrderDelivered,
+  markOrderDelivered
 };

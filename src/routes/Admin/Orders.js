@@ -19,7 +19,7 @@ const {
 router.get(
   "/seller/orders",
   authMiddleware,
-  checkRol(["seller"]),
+  checkRol(["seller"]), 
   getSellerOrders
 );
 

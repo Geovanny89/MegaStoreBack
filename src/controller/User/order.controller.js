@@ -95,7 +95,6 @@ const createOrder = async (req, res) => {
       });
     }
 
-    // Reglas de negocio
     if (deliveryMethod === "pickup" && paymentMethod === "cash") {
       return res.status(400).json({
         message: "No puedes pagar en efectivo si recoges en tienda."
@@ -175,14 +174,15 @@ const createOrder = async (req, res) => {
     const sellers = await User.find({ _id: { $in: sellerIds } });
 
     for (const seller of sellers) {
-      // Guardar notificación
+      // 🔔 NOTIFICACIÓN (FIX: status)
       await Notification.create({
         user: seller._id,
         order: newOrder._id,
-        message: `Nueva orden recibida (#${newOrder._id})`
+        message: `Nueva orden recibida (#${newOrder._id})`,
+        status: newOrder.status // pending
       });
 
-      // Email seller
+      // 📧 EMAIL SELLER
       if (seller.email) {
         await transporter.sendMail({
           from: "pruebadesarrollo2184@gmail.com",
@@ -199,8 +199,6 @@ const createOrder = async (req, res) => {
       }
     }
 
-    /* ================= RESPUESTA ================= */
-
     return res.status(201).json({
       message: "Orden creada exitosamente",
       order: newOrder
@@ -212,8 +210,78 @@ const createOrder = async (req, res) => {
       message: "Error interno al crear la orden."
     });
   }
-};
+}
+const markOrderReceived = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const buyerId = req.user.id;
 
+    const order = await Order.findOne({
+      _id: orderId,
+      user: buyerId
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Orden no encontrada" });
+    }
+
+    if (order.status !== "shipped") {
+      return res.status(400).json({
+        message: "Solo puedes confirmar órdenes enviadas"
+      });
+    }
+
+    // 🔄 Cambiar estado
+    order.status = "delivered";
+    await order.save();
+
+    // ============================
+    // 🔔 NOTIFICACIÓN AL COMPRADOR
+    // ============================
+    await Notification.findOneAndUpdate(
+      { user: buyerId, order: order._id },
+      {
+        message: `Confirmaste la recepción del pedido #${order._id}`,
+        status: "delivered",
+        isRead: false
+      },
+      { upsert: true, new: true }
+    );
+
+    // ============================
+    // 🔔 NOTIFICACIÓN A VENDEDORES
+    // ============================
+    const sellerIds = [
+      ...new Set(order.products.map(p => p.seller.toString()))
+    ];
+
+    for (const sellerId of sellerIds) {
+      await Notification.findOneAndUpdate(
+        { user: sellerId, order: order._id },
+        {
+          message: `El comprador confirmó la recepción del pedido #${order._id}`,
+          status: "delivered",
+          isRead: false
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 💰 AQUÍ luego liberas el pago al vendedor
+    console.log("Liberar pago al vendedor");
+
+    res.json({
+      message: "Pedido confirmado como recibido",
+      order
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Error al confirmar recepción"
+    });
+  }
+};
 
 
 
@@ -224,7 +292,7 @@ const createOrder = async (req, res) => {
 module.exports = {
     getMyOrders,
     createOrder,
-   
+    markOrderReceived
     
 };
 // const completeOrder = async (req, res) => {

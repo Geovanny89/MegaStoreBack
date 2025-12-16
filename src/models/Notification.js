@@ -4,6 +4,18 @@ const notificationSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   type: { type: String, enum: ["order"], default: "order" },
   message: String,
+    status: {
+    type: String,
+    enum: [
+      "pending",
+      "paid",
+      "processing",
+      "shipped",
+      "delivered",
+      "cancelled"
+    ],
+    required: true
+  },
   order: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
   isRead: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
