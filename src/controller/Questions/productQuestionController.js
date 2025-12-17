@@ -185,27 +185,49 @@ const getQuestionsForSeller = async (req, res) => {
 const deleteQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user._id.toString(); // ✅ CORRECTO
     const userRole = req.user.rol;
 
     const question = await ProductQuestion.findById(id);
 
     if (!question) {
-      return res.status(404).json({ message: "Pregunta no encontrada." });
+      return res.status(404).json({
+        message: "Pregunta no encontrada."
+      });
     }
 
-    if (question.userId.toString() !== userId && userRole !== "admin") {
-      return res.status(403).json({ message: "No autorizado para eliminar esta pregunta." });
+    // ❌ Bloquear si ya fue respondida
+    if (question.answer) {
+      return res.status(400).json({
+        message: "No puedes eliminar una pregunta que ya fue respondida."
+      });
     }
 
-    await ProductQuestion.findByIdAndDelete(id);
+    // 🔐 Solo autor o admin
+    if (
+      question.userId.toString() !== userId &&
+      userRole !== "admin"
+    ) {
+      return res.status(403).json({
+        message: "No autorizado para eliminar esta pregunta."
+      });
+    }
 
-    res.json({ message: "Pregunta eliminada correctamente." });
+    await question.deleteOne(); // mejor que findByIdAndDelete
+
+    res.json({
+      message: "Pregunta eliminada correctamente."
+    });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({
+      message: "Error interno del servidor"
+    });
   }
 };
+
+
 module.exports = {
   createQuestion,
   answerQuestion,
