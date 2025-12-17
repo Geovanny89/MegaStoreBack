@@ -38,7 +38,17 @@ const productosSchema = mongoose.Schema({
   type: Schema.Types.ObjectId,
   ref: "User",
   required: true
-}
+},
+ rating: {
+    average: {
+      type: Number,
+      default: 0
+    },
+    count: {
+      type: Number,
+      default: 0
+    }
+  }
  
 
 });

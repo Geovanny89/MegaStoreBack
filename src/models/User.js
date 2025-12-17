@@ -46,6 +46,17 @@ const userSchema = mongoose.Schema({
         type: String,
         default: null
     },
+    // ⭐⭐⭐⭐⭐ RATING DEL VENDEDOR
+  sellerRating: {
+    average: {
+      type: Number,
+      default: 0
+    },
+    count: {
+      type: Number,
+      default: 0
+    }
+  }
 })
 
 

@@ -175,12 +175,14 @@ const createOrder = async (req, res) => {
 
     for (const seller of sellers) {
       // 🔔 NOTIFICACIÓN (FIX: status)
-      await Notification.create({
-        user: seller._id,
-        order: newOrder._id,
-        message: `Nueva orden recibida (#${newOrder._id})`,
-        status: newOrder.status // pending
-      });
+     await Notification.create({
+  user: seller._id,
+  type: "order",                 // 👈 OBLIGATORIO
+  order: newOrder._id,
+  message: `Nueva orden recibida (#${newOrder._id})`,
+  status: newOrder.status,       // pending
+  isRead: false
+});
 
       // 📧 EMAIL SELLER
       if (seller.email) {
