@@ -2,9 +2,9 @@ const mongoose = require("mongoose");
 
 const notificationSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  type: { type: String, enum: ["order"], default: "order" },
+  type: { type: String, enum: ["order","question"], required: true },
   message: String,
-    status: {
+      status: {
     type: String,
     enum: [
       "pending",
@@ -14,7 +14,9 @@ const notificationSchema = new mongoose.Schema({
       "delivered",
       "cancelled"
     ],
-    required: true
+    required: function () {
+      return this.type === "order";
+    }
   },
   order: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
   isRead: { type: Boolean, default: false },

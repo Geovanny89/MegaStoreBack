@@ -1,4 +1,5 @@
 
+const Notification = require("../../models/Notification");
 const ProductQuestion = require("../../models/ProductQuestion");
 const Productos = require("../../models/Productos");
 
@@ -6,34 +7,49 @@ const Productos = require("../../models/Productos");
 // ======================================================
 // 1. Crear una pregunta (solo usuarios autenticados)
 // ======================================================
+
+
 const createQuestion = async (req, res) => {
   try {
-    const userId = req.user.id;   
-    const { productId } = req.params;  
+    const userId = req.user.id;
+    const { productId } = req.params;
     const { question } = req.body;
 
     if (!question || question.trim() === "") {
       return res.status(400).json({ message: "La pregunta no puede estar vacía." });
     }
 
-    // Validar si el producto existe
     const product = await Productos.findById(productId);
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado." });
     }
 
+    // 1️⃣ Guardar pregunta
     const newQuestion = await ProductQuestion.create({
       productId,
       userId,
       question
     });
+    
+
+
+    // 2️⃣ 🔔 NOTIFICACIÓN AL VENDEDOR
+    await Notification.create({
+      user: product.vendedor, // 👈 vendedor
+      type: "question",
+      product: product._id,
+      message: `Nueva pregunta sobre "${product.name}"`,
+      isRead: false
+    });
 
     res.status(201).json(newQuestion);
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
+
 
 
 
@@ -50,25 +66,36 @@ const answerQuestion = async (req, res) => {
       return res.status(400).json({ message: "La respuesta no puede estar vacía." });
     }
 
-    const question = await ProductQuestion.findById(id);
+    const question = await ProductQuestion
+      .findById(id)
+      .populate("productId")
+      .populate("userId");
 
     if (!question) {
       return res.status(404).json({ message: "Pregunta no encontrada." });
     }
 
-    // Guardar respuesta
     question.answer = answer;
     question.answeredBy = sellerId;
     question.answeredAt = new Date();
     await question.save();
 
+    // 🔔 NOTIFICACIÓN AL COMPRADOR
+    await Notification.create({
+      user: question.userId._id,
+      type: "question",
+      product: question.productId._id,
+      message: `Respondieron tu pregunta sobre "${question.productId.name}"`,
+      isRead: false
+    });
+
     res.json(question);
 
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
-
 
 
 // ======================================================
@@ -117,26 +144,38 @@ const getQuestionsByUser = async (req, res) => {
 // 5. Obtener preguntas recibidas por un vendedor
 //    (preguntas de productos que él vende)
 // ======================================================
-// const getQuestionsForSeller = async (req, res) => {
-//   try {
-//     const sellerId = req.user.id;
+const getQuestionsForSeller = async (req, res) => {
+  try {
+    const sellerId = req.user.id; // viene del token
 
-//     // Obtener productos del vendedor
-//     const sellerProducts = await Productos.find({ sellerId }).select("_id");
+    // 1️⃣ Productos del vendedor (CAMPO CORRECTO)
+    const products = await Productos.find({
+      vendedor: sellerId
+    }).select("_id");
 
-//     const productIds = sellerProducts.map(p => p._id);
+    const productIds = products.map(p => p._id);
 
-//     const questions = await ProductQuestion.find({ productId: { $in: productIds } })
-//       .populate("userId", "name lastName")
-//       .populate("productId", "name price")
-//       .sort({ createdAt: -1 });
+    // 🛑 Si no hay productos, no hay preguntas
+    if (productIds.length === 0) {
+      return res.json([]);
+    }
 
-//     res.json(questions);
+    // 2️⃣ Preguntas de esos productos
+    const questions = await ProductQuestion.find({
+      productId: { $in: productIds }
+    })
+      .populate("productId", "name")
+      .sort({ createdAt: -1 });
 
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
+    res.json(questions);
+
+  } catch (error) {
+    console.error("ERROR SELLER QUESTIONS:", error);
+    res.status(500).json({ message: "Error al obtener preguntas" });
+  }
+};
+
+
 
 
 
@@ -172,6 +211,6 @@ module.exports = {
   answerQuestion,
   getQuestionsByProduct,
   getQuestionsByUser,
-  // getQuestionsForSeller,
+  getQuestionsForSeller,
   deleteQuestion
 };
