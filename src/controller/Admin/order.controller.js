@@ -33,58 +33,22 @@ const getSellerOrders = async (req, res) => {
       { $match: { "products.seller": sellerId } },
       {
         $lookup: {
-          from: "productos",
-          localField: "products.product",
-          foreignField: "_id",
-          as: "productDetails"
-        }
-      },
-      {
-        $lookup: {
           from: "users",
           localField: "user",
           foreignField: "_id",
-          as: "userDetails"
+          as: "user"
         }
       },
       {
         $addFields: {
+          user: { $arrayElemAt: ["$user", 0] },
           products: {
-            $map: {
-              input: {
-                $filter: {
-                  input: "$products",
-                  as: "p",
-                  cond: { $eq: ["$$p.seller", sellerId] }
-                }
-              },
-              as: "prod",
-              in: {
-                product: {
-                  $arrayElemAt: [
-                    {
-                      $filter: {
-                        input: "$productDetails",
-                        as: "detail",
-                        cond: { $eq: ["$$detail._id", "$$prod.product"] }
-                      }
-                    },
-                    0
-                  ]
-                },
-                quantity: "$$prod.quantity",
-                price: "$$prod.price",
-                seller: "$$prod.seller"
-              }
+            $filter: {
+              input: "$products",
+              as: "p",
+              cond: { $eq: ["$$p.seller", sellerId] }
             }
-          },
-          user: { $arrayElemAt: ["$userDetails", 0] }
-        }
-      },
-      {
-        $project: {
-          productDetails: 0,
-          userDetails: 0
+          }
         }
       }
     ]);
@@ -92,9 +56,10 @@ const getSellerOrders = async (req, res) => {
     res.json(orders);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error obteniendo órdenes del vendedor." });
+    res.status(500).json({ message: "Error obteniendo órdenes" });
   }
 };
+
 
 /* ============================================================
    2. VENDEDOR: Marcar orden en PROCESSING
@@ -113,8 +78,10 @@ const markOrderProcessing = async (req, res) => {
       return res.status(404).json({ message: "Orden no encontrada" });
     }
 
-    if (order.status !== "paid") {
-      return res.status(400).json({ message: "La orden debe estar paga" });
+    if (order.paymentStatus !== "confirmed") {
+      return res.status(400).json({
+        message: "Pago no confirmado"
+      });
     }
 
     order.status = "processing";
@@ -123,15 +90,16 @@ const markOrderProcessing = async (req, res) => {
     await upsertOrderNotification({
       userId: order.user,
       order,
-      message: `Tu pedido #${order._id} está en preparación.`
+      message: `Tu pedido #${order._id} está en preparación`
     });
 
     res.json({ message: "Orden en procesamiento", order });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error al actualizar orden" });
+    res.status(500).json({ message: "Error al procesar orden" });
   }
 };
+
 
 /* ============================================================
    3. VENDEDOR: Marcar orden como SHIPPED
@@ -144,33 +112,32 @@ const markOrderShipped = async (req, res) => {
     const order = await Order.findOne({
       _id: orderId,
       "products.seller": sellerId
-    })
-      .populate("user")
-      .populate("products.product");
+    }).populate("user");
 
     if (!order) {
       return res.status(404).json({ message: "Orden no encontrada" });
     }
 
     if (order.status !== "processing") {
-      return res.status(400).json({ message: "La orden debe estar en procesamiento" });
+      return res.status(400).json({
+        message: "La orden debe estar en procesamiento"
+      });
     }
 
     order.status = "shipped";
     await order.save();
 
-    // 📧 Email
     await transporter.sendMail({
-      from: "pruebadesarrollo2184@gmail.com",
+      from: "no-reply@megastore.com",
       to: order.user.email,
-      subject: `Pedido enviado - Orden #${order._id}`,
-      html: `<p>Tu pedido ha sido enviado.</p>`
+      subject: `Pedido enviado`,
+      html: `<p>Tu pedido #${order._id} fue enviado.</p>`
     });
 
     await upsertOrderNotification({
       userId: order.user._id,
       order,
-      message: `Tu pedido #${order._id} fue enviado.`
+      message: `Tu pedido #${order._id} fue enviado`
     });
 
     res.json({ message: "Orden enviada", order });
@@ -180,66 +147,88 @@ const markOrderShipped = async (req, res) => {
   }
 };
 
+
+
 /* ============================================================
-   4. COMPRADOR: Confirmar DELIVERED
+   CONFIRMAR PAGO (Control Manual Total)
 ============================================================ */
-const markOrderDelivered = async (req, res) => {
+const confirmPayment = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const buyerId = req.user.id;
+    const sellerId = req.user.id;
 
     const order = await Order.findOne({
       _id: orderId,
-      user: buyerId
-    }).populate("products.seller");
+      "products.seller": sellerId
+    }).populate("user");
+
+    if (!order) return res.status(404).json({ message: "Orden no encontrada" });
+
+    // Actualizamos ambos estados según tu Schema
+    order.paymentStatus = "confirmed"; //
+    
+    // Si es contraentrega va a entregado, si no, a preparación
+    if (order.paymentMethod === "cash_on_delivery") {
+      order.status = "delivered";
+    } else {
+      order.status = "processing"; // Estado correcto según tu Schema
+    }
+
+    await order.save();
+
+    await upsertOrderNotification({
+      userId: order.user._id,
+      order,
+      message: `Tu pago del pedido #${order._id} fue confirmado.`
+    });
+
+    res.json({ message: "Pago confirmado", order });
+  } catch (error) {
+    res.status(500).json({ message: "Error al confirmar" });
+  }
+};
+
+const rejectPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    const sellerId = req.user.id;
+
+    const order = await Order.findOne({
+      _id: orderId,
+      "products.seller": sellerId
+    }).populate("user");
 
     if (!order) {
       return res.status(404).json({ message: "Orden no encontrada" });
     }
 
-    if (order.status !== "shipped") {
-      return res.status(400).json({ message: "La orden debe estar enviada" });
-    }
-
-    // 🔄 Cambiar estado
-    order.status = "delivered";
+    order.paymentStatus = "rejected";
+    order.paymentRejectionReason = reason || "Pago fraudulento";
+    order.status = "cancelled";
     await order.save();
 
-    // ============================
-    // NOTIFICACIÓN AL COMPRADOR
-    // ============================
+    // 🔔 Notificación
     await upsertOrderNotification({
-      userId: order.user,
+      userId: order.user._id,
       order,
-      message: `Confirmaste la entrega del pedido #${order._id}.`
+      message: `Tu pago del pedido #${order._id} fue rechazado. Motivo: ${order.paymentRejectionReason}`
     });
 
-    // ============================
-    // NOTIFICACIÓN A VENDEDORES
-    // ============================
-    const sellerIds = [
-      ...new Set(order.products.map(p => p.seller.toString()))
-    ];
-
-    for (const sellerId of sellerIds) {
-      await upsertOrderNotification({
-        userId: sellerId,
-        order,
-        message: `El comprador confirmó la entrega del pedido #${order._id}.`
-      });
-    }
-
-    res.json({ message: "Orden entregada", order });
+    res.json({
+      message: "Pago rechazado por posible fraude",
+      order
+    });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error al confirmar entrega" });
+    res.status(500).json({ message: "Error al rechazar pago" });
   }
 };
-
 
 module.exports = {
   getSellerOrders,
   markOrderProcessing,
   markOrderShipped,
-  markOrderDelivered
+  confirmPayment,
+  rejectPayment
 };

@@ -1,5 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 const authMiddleware = require("../../middleware/sesion");
 const checkRol = require("../../middleware/rol");
@@ -8,8 +11,10 @@ const {
   getSellerOrders,
   markOrderProcessing,
   markOrderShipped,
-  markOrderDelivered,
+  confirmPayment,
+  rejectPayment,
 } = require("../../controller/Admin/order.controller");
+const { uploadPaymentProof } = require("../../controller/User/order.controller");
 
 /* ============================================================
    RUTAS PARA VENDEDOR
@@ -43,12 +48,26 @@ router.put(
    RUTAS PARA COMPRADOR
    ============================================================ */
 
-// Confirmar entrega de la orden ("delivered")
+// Confirmar pago
 router.put(
-  "/buyer/orders/:orderId/delivered",
+  "/seller/orders/:orderId/confirm-payment",
   authMiddleware,
-  checkRol(["user"]),
-  markOrderDelivered
+  checkRol(["seller", "admin"]),
+  confirmPayment
+);
+
+// Rechazar pago (fraude)
+router.put(
+  "/seller/orders/:orderId/reject-payment",
+  authMiddleware,
+  checkRol(["seller", "admin"]),
+  rejectPayment
+);
+router.put(
+  "/buyer/orders/:orderId/payment-proof",
+  authMiddleware,
+  upload.single("image"),
+  uploadPaymentProof
 );
 
 module.exports = router;

@@ -22,6 +22,7 @@ const notificacion= require('./Notificaciones/notificacion')
 const notificacionesUser = require('./User/notificaciones') 
 const calificaciones = require('./Calificaciones/reviews')
 const dashboardSeller = require('./Seller/dashboard')
+const messages = require('./Messages/messages') 
 
 
 const router = express();
@@ -49,6 +50,7 @@ router.use(notificacion)
 router.use(notificacionesUser)
 router.use(calificaciones)
 router.use(dashboardSeller)
+router.use(messages)
 
 
 

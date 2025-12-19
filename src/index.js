@@ -1,17 +1,28 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require('cors');
-const bodyParser= require('body-parser');
+const bodyParser = require('body-parser');
 const cookieParser = require("cookie-parser");
-const seedPlanes = require('./seed/seedPlanes.js');
-const stripeRoutes = require('./routes/User/stripe.js');
-const stripeWebhookHandler = require('./webhooks/stripeWebhook');
+const http = require("http");
 const { JWT_SECRET } = process.env;
 
+// Importaciones de base de datos y utilidades
+require('./database/db.js');
+const seedPlanes = require('./seed/seedPlanes.js');
+const createAdmin = require('./utils/createAdmin');
+const stripeWebhookHandler = require('./webhooks/stripeWebhook');
+
 const app = express();
+const server = http.createServer(app); // ✅ Creamos el server HTTP primero
 
 /* -------------------------------------------------------------------------- */
-/*                            1. WEBHOOK SIN JSON                             */
+/* 1. CONFIGURACIÓN DE SOCKET.IO                                              */
+/* -------------------------------------------------------------------------- */
+// Lo inicializamos antes que las rutas para tener la instancia lista
+require("./socket/socket")(server, app); 
+
+/* -------------------------------------------------------------------------- */
+/* 2. WEBHOOK DE STRIPE (DEBE IR ANTES QUE EL BODY PARSER JSON)               */
 /* -------------------------------------------------------------------------- */
 app.post(
   '/api/webhook/stripe',
@@ -20,61 +31,49 @@ app.post(
 );
 
 /* -------------------------------------------------------------------------- */
-/*                         2. JSON PARSERS (DESPUÉS)                          */
+/* 3. MIDDLEWARES GLOBALES (JSON, CORS, COOKIES)                              */
 /* -------------------------------------------------------------------------- */
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-/* -------------------------------------------------------------------------- */
-/*                              3. CONFIG CORS                                */
-/* -------------------------------------------------------------------------- */
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'x-user-session','Authorization']
-}));
-
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", '*');
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept"
-  );
-  res.header("Access-Control-Allow-Methods",
-    "GET, POST, OPTIONS, PUT, DELETE"
-  );
-  next();
-});
-console.log("Servidor inicializado. Esperando webhooks en /api/webhook/stripe");
-
-/* -------------------------------------------------------------------------- */
-/*                            4. COOKIE + ROUTES                              */
-/* -------------------------------------------------------------------------- */
 app.use(cookieParser(JWT_SECRET));
 
-// Rutas Stripe
-app.use('/api/stripe', stripeRoutes);
+app.use(cors({
+  origin: '*', // En producción, especifica tu URL de frontend
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'x-user-session', 'Authorization']
+}));
 
-// Rutas generales
+/* -------------------------------------------------------------------------- */
+/* 4. INYECCIÓN DE SOCKET EN REQ (¡IMPORTANTE: ANTES DE LAS RUTAS!)           */
+/* -------------------------------------------------------------------------- */
+app.use((req, res, next) => {
+  // Recuperamos la instancia de io que guardamos en app.set dentro de socket/socket.js
+  const io = app.get("io");
+  req.io = io;
+  next();
+});
+
+/* -------------------------------------------------------------------------- */
+/* 5. RUTAS DE LA API                                                         */
+/* -------------------------------------------------------------------------- */
+const stripeRoutes = require('./routes/User/stripe.js');
+app.use('/api/stripe', stripeRoutes);
 app.use('/api', require('./routes/index.js'));
 
 /* -------------------------------------------------------------------------- */
-/*                              5. INICIO SERVIDOR                            */
+/* 6. INICIALIZACIÓN Y SEEDING                                                */
 /* -------------------------------------------------------------------------- */
 const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en el puerto ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Servidor escuchando en el puerto ${PORT}`);
+  console.log("📍 Webhook de Stripe activo en /api/webhook/stripe");
+  
+  // Ejecutamos tareas iniciales
+  createAdmin();
+  seedPlanes();
 });
-
-/* -------------------------------------------------------------------------- */
-/*                             6. DATABASE + ADMIN                            */
-/* -------------------------------------------------------------------------- */
-require('./database/db.js');
-const createAdmin = require('./utils/createAdmin');
-createAdmin();
-seedPlanes();
 
 // require('dotenv').config();
 // const express = require("express");

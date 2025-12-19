@@ -46,6 +46,16 @@ const userSchema = mongoose.Schema({
         type: String,
         default: null
     },
+     paymentMethods: {
+  nequi: {
+    phone: { type: String, default: null },
+    qr: { type: String, default: null }
+  },
+  daviplata: {
+    phone: { type: String, default: null },
+    qr: { type: String, default: null }
+  }
+},
     // ⭐⭐⭐⭐⭐ RATING DEL VENDEDOR
   sellerRating: {
     average: {
