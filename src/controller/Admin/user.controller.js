@@ -2,7 +2,9 @@ const User = require("../../models/User")
 
 const allUser = async(req,res)=>{
     try {
+      
         const users = await User.find()
+          console.log(users)
         if(!users){
             res.status(404).send("No existen Usuarios")
             return

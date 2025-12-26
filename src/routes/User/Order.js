@@ -1,6 +1,7 @@
 const express = require("express");
-const { createOrder,  getMyOrders, markOrderReceived } = require("../../controller/User/order.controller");
+const { createOrder,  getMyOrders, markOrderReceived, getMyOrdersByStore } = require("../../controller/User/order.controller");
 const authMiddleware = require("../../middleware/sesion");
+const checkRol = require('../../middleware/rol');
 
 
 const router=express();
@@ -12,6 +13,14 @@ router.put(
   authMiddleware,
   markOrderReceived
 );
+// GET /orders/store/:slug
+router.get(
+  "/order/my-orders/store/:slug",
+  authMiddleware,
+  checkRol(["user"]),
+  getMyOrdersByStore
+);
+
 
 
 

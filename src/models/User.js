@@ -1,73 +1,111 @@
-const { mongoose } = require('mongoose')
+const mongoose = require("mongoose");
 const addressSchema = require("./Address");
-const userSchema = mongoose.Schema({
-    name: {
-        type: String,
-        require: true
-    },
-    lastName: {
-        type: String
-    },
-    identity: {
-        type: String
-    },
-    email: {
-        type: String
-    },
-    password: {
-        type: String
-    },
-    phone: {
-        type: String
-    },
-    resetPasswordToken: {
-        type: String,
-        default: null
-    },
-    resetPasswordExpires: {
-        type: Date,
-        default: null
-    },
+const slugify = require("slugify");
 
-    // varias direcciones
-    addresses: [addressSchema],
-    rol: {
-        type: String,
-        enum: ["user", "seller", "admin"],
-        required: true
-    },
+const userSchema = new mongoose.Schema({
 
-    // solo sellers usan este campo
-    storeName: {
-        type: String,
-        default: null
-    },
-    image: {
-        type: String,
-        default: null
-    },
-     paymentMethods: {
-  nequi: {
-    phone: { type: String, default: null },
-    qr: { type: String, default: null }
+  /* ================= DATOS BÁSICOS ================= */
+  name: { type: String, required: true },
+  lastName: String,
+  identity: String,
+  email: String,
+  password: String,
+  phone: String,
+
+  resetPasswordToken: { type: String, default: null },
+  resetPasswordExpires: { type: Date, default: null },
+
+  addresses: [addressSchema],
+
+  rol: {
+    type: String,
+    enum: ["user", "seller", "admin"],
+    required: true
   },
-  daviplata: {
-    phone: { type: String, default: null },
-    qr: { type: String, default: null }
-  }
-},
-    // ⭐⭐⭐⭐⭐ RATING DEL VENDEDOR
-  sellerRating: {
-    average: {
-      type: Number,
-      default: 0
+
+  /* ================= TIENDA ================= */
+  storeName: {
+    type: String,
+    default: null
+  },
+
+  slug: {
+    type: String,
+    unique: true,
+    sparse: true,
+    lowercase: true,
+    trim: true
+  },
+
+  image: {
+    type: String,
+    default: null
+  },
+
+  /* ================= ESTADO SELLER ================= */
+  sellerStatus: {
+    type: String,
+    enum: [
+      "pending_payment",
+      "pending_review",
+      "active",
+      "rejected"
+    ],
+    default: function () {
+      return this.rol === "seller" ? "pending_payment" : "active";
     },
-    count: {
-      type: Number,
-      default: 0
+    index: true
+  },
+
+  paymentProof: {
+    type: String,
+    default: null
+  },
+
+  paymentDate: {
+    type: Date,
+    default: null
+  },
+
+  /* ================= MÉTODOS DE PAGO ================= */
+  paymentMethods: {
+    nequi: {
+      phone: String,
+      qr: String
+    },
+    daviplata: {
+      phone: String,
+      qr: String
     }
+  },
+
+  /* ================= RATING ================= */
+  sellerRating: {
+    average: { type: Number, default: 0 },
+    count: { type: Number, default: 0 }
   }
-})
 
+}, { timestamps: true });
 
-module.exports = mongoose.model('User', userSchema)
+/* ===================== GENERAR SLUG AUTOMÁTICO ===================== */
+userSchema.pre("save", async function (next) {
+  if (this.rol === "seller" && this.storeName && !this.slug) {
+    let baseSlug = slugify(this.storeName, {
+      lower: true,
+      strict: true
+    });
+
+    let slug = baseSlug;
+    let count = 1;
+
+    while (await mongoose.models.User.findOne({ slug })) {
+      slug = `${baseSlug}-${count++}`;
+    }
+
+    this.slug = slug;
+  }
+
+  next();
+});
+
+module.exports = mongoose.model("User", userSchema);

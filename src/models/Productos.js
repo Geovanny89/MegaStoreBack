@@ -26,9 +26,13 @@ const productosSchema = mongoose.Schema({
     description: {
         type: String
     },
-    image: [{
-        type: String // Cambiado a String para almacenar URLs
-    }],
+   image: [
+  {
+    url: { type: String, required: true },
+    public_id: { type: String, required: true }
+  }
+],
+
     tipo: { 
         type: Schema.Types.ObjectId, 
         ref: 'TipoProductos',

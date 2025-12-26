@@ -311,21 +311,24 @@ const createProduct = async (req, res) => {
       : [];
 
     // Subida de imágenes a Cloudinary
-    const imageUrls = await Promise.all(
-      req.files.map(
-        (file) =>
-          new Promise((resolve, reject) => {
-            const upload = cloudinary.uploader.upload_stream(
-              { folder: "Carpeta_tienda" },
-              (err, result) => {
-                if (err) return reject(err);
-                resolve(result.secure_url);
-              }
-            );
-            upload.end(file.buffer);
-          })
-      )
-    );
+  const imageUrls = await Promise.all(
+  req.files.map(file =>
+    new Promise((resolve, reject) => {
+      const upload = cloudinary.uploader.upload_stream(
+        { folder: "Carpeta_tienda" },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve({
+            url: result.secure_url,
+            public_id: result.public_id
+          });
+        }
+      );
+      upload.end(file.buffer);
+    })
+  )
+);
+
 
     // Crear producto
     const product = new Productos({
@@ -412,21 +415,33 @@ const updateProduct = async (req, res) => {
 
 const deleteProduct = async (req, res) => {
   try {
-    const { id } = req.params
-    const product = await Productos.findById(id)
-    console.log("soy el producto a eliminar", product)
-    if (!product) {
-      res.status(404).send("No existe producto con ese Id ")
-      return
-    }
-    const productDelete = await Productos.findByIdAndDelete(product)
+    const { id } = req.params;
 
-    res.status(200).send("Producto Eliminado")
+    const product = await Productos.findById(id);
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    // 🔥 ELIMINAR IMÁGENES DE CLOUDINARY
+    if (product.image && product.image.length > 0) {
+      await Promise.all(
+        product.image.map(img =>
+          cloudinary.uploader.destroy(img.public_id)
+        )
+      );
+    }
+
+    // 🗑 Eliminar producto de la DB
+    await Productos.findByIdAndDelete(id);
+
+    res.json({ message: "Producto e imágenes eliminados correctamente" });
+
   } catch (error) {
-    console.log(error)
-    res.status(500).json({ message: error.message })
+    console.error("Error eliminando producto:", error);
+    res.status(500).json({ message: error.message });
   }
-}
+};
+
 const getProductId = async (req, res) => {
   try {
     const product = await Productos.findById(req.params.id)

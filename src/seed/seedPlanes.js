@@ -6,8 +6,8 @@ const seedPlanes = async () => {
     const count = await Planes.countDocuments();
     if (count === 0) {
       await Planes.insertMany([
-        { nombre: 'basico', precio: 45000, productos_permitidos: 15, duracion_meses: 1 },
-        { nombre: 'avanzado', precio: 70000, productos_permitidos: 50, duracion_meses: 1 }
+        { nombre: 'Emprendedor', precio: 45000, productos_permitidos: 20, duracion_meses: 1 },
+        { nombre: 'Avanzado', precio: 70000, productos_permitidos: 80, duracion_meses: 1 }
       ]);
       console.log('Planes insertados correctamente');
     }

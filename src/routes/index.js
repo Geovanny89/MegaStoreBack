@@ -19,10 +19,13 @@ const vendedorProductos= require("./Seller/productos.vendedor")
 const orders = require('./Admin/Orders')
 const vendedorid = require('./User/vendedorId')
 const notificacion= require('./Notificaciones/notificacion')
-const notificacionesUser = require('./User/notificaciones') 
+// const notificacionesUser = require('./User/notificaciones') 
 const calificaciones = require('./Calificaciones/reviews')
 const dashboardSeller = require('./Seller/dashboard')
 const messages = require('./Messages/messages') 
+const store = require('./Store/store')
+const sellerPago = require('./Admin/sellerPago') 
+const validarPago = require('./Admin/validate-payment')
 
 
 const router = express();
@@ -47,10 +50,13 @@ router.use(vendedorProductos)
 router.use(orders)
 router.use(vendedorid)
 router.use(notificacion)
-router.use(notificacionesUser)
+// router.use(notificacionesUser)
 router.use(calificaciones)
 router.use(dashboardSeller)
 router.use(messages)
+router.use(store)
+router.use(sellerPago)
+router.use(validarPago)
 
 
 

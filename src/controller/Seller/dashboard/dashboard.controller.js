@@ -18,24 +18,16 @@ const getSellerDashboard = async (req, res) => {
       { $match: match },
       { $unwind: "$products" },
       { $match: { "products.seller": sellerId } },
-      {
-        $match: {
-          createdAt: { $gte: startToday }
-        }
-      },
+      { $match: { createdAt: { $gte: startToday } } },
       {
         $group: {
           _id: null,
-          total: {
-            $sum: {
-              $multiply: ["$products.price", "$products.quantity"]
-            }
-          }
+          total: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
         }
       }
     ]);
 
-    /* ================= SEMANA ================= */
+    /* ================= SEMANA (Últimos 7 días) ================= */
     const startWeek = new Date();
     startWeek.setDate(startWeek.getDate() - 7);
 
@@ -43,24 +35,16 @@ const getSellerDashboard = async (req, res) => {
       { $match: match },
       { $unwind: "$products" },
       { $match: { "products.seller": sellerId } },
-      {
-        $match: {
-          createdAt: { $gte: startWeek }
-        }
-      },
+      { $match: { createdAt: { $gte: startWeek } } },
       {
         $group: {
           _id: null,
-          total: {
-            $sum: {
-              $multiply: ["$products.price", "$products.quantity"]
-            }
-          }
+          total: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
         }
       }
     ]);
 
-    /* ================= MES ================= */
+    /* ================= MES (Desde el día 1) ================= */
     const startMonth = new Date();
     startMonth.setDate(1);
     startMonth.setHours(0, 0, 0, 0);
@@ -69,43 +53,30 @@ const getSellerDashboard = async (req, res) => {
       { $match: match },
       { $unwind: "$products" },
       { $match: { "products.seller": sellerId } },
-      {
-        $match: {
-          createdAt: { $gte: startMonth }
-        }
-      },
+      { $match: { createdAt: { $gte: startMonth } } },
       {
         $group: {
           _id: null,
-          total: {
-            $sum: {
-              $multiply: ["$products.price", "$products.quantity"]
-            }
-          }
+          total: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
         }
       }
     ]);
 
-    /* ================= VENTAS DIARIAS ================= */
+    /* ================= VENTAS DIARIAS (Gráfica) ================= */
     const dailySales = await Order.aggregate([
       { $match: match },
       { $unwind: "$products" },
       { $match: { "products.seller": sellerId } },
       {
         $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-          },
-          total: {
-            $sum: {
-              $multiply: ["$products.price", "$products.quantity"]
-            }
-          }
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          total: { $sum: { $multiply: ["$products.price", "$products.quantity"] } }
         }
       },
       { $sort: { _id: 1 } }
     ]);
 
+    /* ================= RESPUESTA FINAL ================= */
     res.json({
       summary: {
         today: today[0]?.total || 0,
@@ -115,7 +86,12 @@ const getSellerDashboard = async (req, res) => {
       dailySales: dailySales.map(d => ({
         date: d._id,
         total: d.total
-      }))
+      })),
+      // Información del vendedor necesaria para el Link y el QR en el Frontend
+      seller: {
+        slug: req.user.slug,
+        storeName: req.user.storeName
+      }
     });
 
   } catch (error) {

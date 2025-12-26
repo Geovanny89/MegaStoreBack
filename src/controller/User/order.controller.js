@@ -27,6 +27,30 @@ const getMyOrders = async (req, res) => {
 };
 
 
+const getMyOrdersByStore = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { slug } = req.params;
+
+    const seller = await User.findOne({ slug, rol: "seller" });
+    if (!seller) {
+      return res.status(404).json({ message: "Tienda no encontrada" });
+    }
+
+    const orders = await Order.find({
+      user: userId,
+      "products.seller": seller._id // ✅ CLAVE
+    })
+      .populate("products.product")
+      .sort({ createdAt: -1 });
+
+    res.json(orders);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error obteniendo órdenes de la tienda" });
+  }
+};
+
 
 
 
@@ -148,7 +172,6 @@ const createOrder = async (req, res) => {
 };
 
 
-
 const markOrderReceived = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -216,6 +239,7 @@ const markOrderReceived = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -295,7 +319,8 @@ module.exports = {
   getMyOrders,
   createOrder,
     markOrderReceived,
-    uploadPaymentProof
+    uploadPaymentProof,
+    getMyOrdersByStore
     
   };
 // const completeOrder = async (req, res) => {

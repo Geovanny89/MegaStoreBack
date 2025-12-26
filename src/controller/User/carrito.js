@@ -1,5 +1,6 @@
 const Carrito = require('../../models/Carrito');
 const Producto = require('../../models/Productos');
+const User = require('../../models/User');
 
 // ========================
 // VER PRODUCTOS EN CARRITO
@@ -22,7 +23,7 @@ const verProductosEnCarrito = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Error retrieving carrito." });
   }
-};
+}; 
 
 
 
@@ -120,11 +121,56 @@ const deleteProductoCarrito =async (req,res) =>{
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 }
+const verCarritoPorTienda = async (req, res) => {
+  try {
+    const { slug } = req.params; // Viene de la URL: /user/car/tienda/:slug
+    const userId = req.user._id;
+
+    // 1. Buscar al vendedor por su slug
+    const vendedor = await User.findOne({ slug: slug, rol: "seller" });
+    
+    if (!vendedor) {
+      return res.status(404).json({ error: "La tienda no existe" });
+    }
+
+    // 2. Buscar el carrito del usuario y filtrar los items de ese vendedor
+    const carrito = await Carrito.findOne({ user: userId })
+      .populate({
+        path: 'items.product',
+        match: { vendedor: vendedor._id }, // Solo productos que pertenecen a este vendedor
+        populate: { 
+          path: 'vendedor', 
+          select: 'storeName image slug paymentMethods' // Traemos info útil de la tienda
+        }
+      });
+
+    if (!carrito) {
+      return res.json({ items: [], storeInfo: vendedor });
+    }
+
+    // 3. Limpiar los items que no pertenecen a esta tienda (vienen como null por el match)
+    const itemsFiltrados = carrito.items.filter(i => i.product !== null);
+
+    res.json({ 
+      items: itemsFiltrados,
+      storeInfo: {
+        name: vendedor.storeName,
+        image: vendedor.image,
+        payment: vendedor.paymentMethods // Útil para mostrar dónde pagar
+      }
+    });
+
+  } catch (error) {
+    console.error("Error en verCarritoPorTienda:", error);
+    res.status(500).json({ error: "Error interno al obtener el carrito" });
+  }
+};
 
 module.exports = {
   agregarProductoAlCarrito,
   deleteProductoCarrito,
-  verProductosEnCarrito
+  verProductosEnCarrito,
+  verCarritoPorTienda
   
 };
 

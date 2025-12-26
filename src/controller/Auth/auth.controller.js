@@ -7,12 +7,12 @@ const { tokenSign } = require('../../utils/handleJwt');
 const { transporter, mailDetails } = require('../../mailer/nodemailer');
 const crypto = require("crypto");
 const cloudinary = require("../../utils/cloudinary");
+const slugify = require('slugify');
 
 const register = async (req, res) => {
   try {
     const data = matchedData(req);
 
-    // verificar email único
     const existingUser = await User.findOne({ email: data.email });
     if (existingUser) {
       return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
@@ -22,13 +22,22 @@ const register = async (req, res) => {
 
     let plan = null;
     let storeLogoUrl = null;
+    let generatedSlug = null; // Variable para el slug
 
-    // 👉 VALIDACIONES SELLER
     if (data.rol === "seller") {
-
       if (!data.storeName) {
         return res.status(400).json({ error: "Los sellers deben enviar storeName" });
       }
+
+      // --- GENERACIÓN DEL SLUG ---
+      generatedSlug = slugify(data.storeName, { lower: true, strict: true });
+      
+      // Validar si el slug ya existe para evitar errores de duplicado
+      const existingSlug = await User.findOne({ slug: generatedSlug });
+      if (existingSlug) {
+        generatedSlug = `${generatedSlug}-${crypto.randomBytes(2).toString('hex')}`;
+      }
+      // ---------------------------
 
       if (!data.planId) {
         return res.status(400).json({ error: "Debes seleccionar un plan para registrarte como seller" });
@@ -43,7 +52,6 @@ const register = async (req, res) => {
         return res.status(404).json({ error: "El plan seleccionado no existe o está inactivo" });
       }
 
-      // 🔥 SUBIR LOGO A CLOUDINARY (MISMO MÉTODO QUE PRODUCTOS)
       storeLogoUrl = await new Promise((resolve, reject) => {
         const upload = cloudinary.uploader.upload_stream(
           { folder: "store_logos" },
@@ -56,51 +64,52 @@ const register = async (req, res) => {
       });
     }
 
-    // 👉 CREAR USUARIO
-    const newUser = new User({
-      ...data,
-      password: hashedPassword,
-      image: storeLogoUrl // 👈 logo guardado aquí
-    });
+const newUser = new User({
+  ...data,
+  password: hashedPassword,
+  image: storeLogoUrl,
+  slug: generatedSlug,
+  sellerStatus: data.rol === "seller" ? "pending_payment" : "active"
+
+});
 
     await newUser.save();
 
-    // 👉 CREAR SUSCRIPCIÓN SI ES SELLER
     if (data.rol === "seller") {
+      // ... (tu lógica de suscripción se mantiene igual)
       const fechaInicio = new Date();
       const fechaVencimiento = new Date();
-      fechaVencimiento.setMonth(
-        fechaVencimiento.getMonth() + plan.duracion_meses
-      );
+      fechaVencimiento.setMonth(fechaVencimiento.getMonth() + plan.duracion_meses);
 
       await Suscripciones.create({
         id_usuario: newUser._id,
         plan_id: plan._id,
         fecha_inicio: fechaInicio,
         fecha_vencimiento: fechaVencimiento,
-        estado: "activa"
+        estado: "pendiente"
       });
     }
 
-    // 👉 ENVIAR EMAIL
     const welcomeEmail = mailDetails(newUser.email, newUser.name);
     await transporter.sendMail(welcomeEmail);
 
+    // RESPUESTA FINAL ENRIQUECIDA
     res.status(201).json({
-      message: "Usuario registrado correctamente",
-      usuario: newUser,
-      suscripcion: data.rol === "seller" ? "creada" : "no aplica"
-    });
+  message: data.rol === "seller"
+    ? "Registro exitoso. Debes enviar el comprobante de pago para activar tu tienda."
+    : "Usuario registrado correctamente",
+
+  usuario: newUser,
+  storeUrl: generatedSlug ? `/tienda/${generatedSlug}` : null,
+  nextStep: data.rol === "seller" ? "upload-payment-proof" : null
+});
+
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error al registrar el usuario" });
   }
 };
-
-
-
-
 const login = async (req, res) => {
   try {
     const requestData = matchedData(req);

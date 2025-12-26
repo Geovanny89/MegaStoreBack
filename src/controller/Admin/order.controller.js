@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { transporter } = require("../../mailer/nodemailer");
 const Order = require("../../models/Order");
 const Notification = require("../../models/Notification");
+const Productos = require("../../models/Productos");
 
 /* ============================================================
    UTIL: crear o actualizar notificación de orden
@@ -153,6 +154,9 @@ const markOrderShipped = async (req, res) => {
    CONFIRMAR PAGO (Control Manual Total)
 ============================================================ */
 const confirmPayment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { orderId } = req.params;
     const sellerId = req.user.id;
@@ -160,33 +164,78 @@ const confirmPayment = async (req, res) => {
     const order = await Order.findOne({
       _id: orderId,
       "products.seller": sellerId
-    }).populate("user");
+    })
+      .populate("products.product user")
+      .session(session);
 
-    if (!order) return res.status(404).json({ message: "Orden no encontrada" });
-
-    // Actualizamos ambos estados según tu Schema
-    order.paymentStatus = "confirmed"; //
-    
-    // Si es contraentrega va a entregado, si no, a preparación
-    if (order.paymentMethod === "cash_on_delivery") {
-      order.status = "delivered";
-    } else {
-      order.status = "processing"; // Estado correcto según tu Schema
+    if (!order) {
+      throw new Error("Orden no encontrada");
     }
 
-    await order.save();
+    if (order.paymentStatus === "confirmed") {
+      throw new Error("Pago ya confirmado");
+    }
 
-    await upsertOrderNotification({
-      userId: order.user._id,
-      order,
-      message: `Tu pago del pedido #${order._id} fue confirmado.`
-    });
+    // 🔒 VALIDACIÓN CLAVE
+    if (
+      order.paymentMethod !== "cash_on_delivery" &&
+      (!order.paymentProof || !order.paymentProof.fileUrl)
+    ) {
+      throw new Error("No se puede confirmar el pago sin comprobante");
+    }
 
-    res.json({ message: "Pago confirmado", order });
+    /* =====================================
+       🔥 DESCONTAR STOCK
+    ===================================== */
+    for (const item of order.products) {
+      if (item.seller.toString() !== sellerId) continue;
+
+      const result = await Productos.updateOne(
+        { _id: item.product._id, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+        { session }
+      );
+
+      if (result.modifiedCount === 0) {
+        throw new Error(`Stock insuficiente para ${item.product.name}`);
+      }
+    }
+
+    order.paymentStatus = "confirmed";
+    order.status =
+      order.paymentMethod === "cash_on_delivery"
+        ? "delivered"
+        : "processing";
+
+    await order.save({ session });
+
+    await Notification.create(
+      [{
+        user: order.user._id,
+        type: "order",
+        order: order._id,
+        message: `Tu pago del pedido #${order._id} fue confirmado.`,
+        status: order.status,
+        isRead: false
+      }],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ message: "Pago confirmado y stock actualizado", order });
+
   } catch (error) {
-    res.status(500).json({ message: "Error al confirmar" });
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error("❌ Error confirmando pago:", error);
+    res.status(400).json({ message: error.message });
   }
 };
+
+
 
 const rejectPayment = async (req, res) => {
   try {

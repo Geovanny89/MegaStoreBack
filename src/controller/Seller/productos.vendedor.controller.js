@@ -68,21 +68,31 @@ const createSellerProduct = async (req, res) => {
     const colorsArray = color ? color.split(",").map((c) => c.trim()) : [];
 
     // Subir imágenes a Cloudinary
-    const imageUrls = await Promise.all(
-      req.files.map(
-        (file) =>
-          new Promise((resolve, reject) => {
-            const upload = cloudinary.uploader.upload_stream(
-              { folder: "productos_tienda" },
-              (err, result) => {
-                if (err) reject(err);
-                else resolve(result.secure_url);
-              }
-            );
-            upload.end(file.buffer);
-          })
-      )
-    );
+   const imageUrls = await Promise.all(
+  req.files.map(file => {
+    if (!file.buffer) {
+      throw new Error("Archivo de imagen inválido");
+    }
+
+    return new Promise((resolve, reject) => {
+      const upload = cloudinary.uploader.upload_stream(
+        {
+          folder: "productos_tienda",
+          resource_type: "image"
+        },
+        (err, result) => {
+          if (err) return reject(err);
+          resolve({
+            url: result.secure_url,
+            public_id: result.public_id
+          });
+        }
+      );
+      upload.end(file.buffer);
+    });
+  })
+);
+
 
     const nuevoProducto = new Productos({
       name,
@@ -127,9 +137,9 @@ const updateSellerProduct = async (req, res) => {
 
     /* ================= IMÁGENES ================= */
 
+    // 1️⃣ Imágenes que el seller decidió mantener
     let imagesArray = [];
 
-    // Imágenes existentes que el seller decidió mantener
     if (req.body.existingImages) {
       try {
         imagesArray = JSON.parse(req.body.existingImages);
@@ -138,6 +148,17 @@ const updateSellerProduct = async (req, res) => {
           .status(400)
           .json({ message: "Formato inválido de existingImages" });
       }
+    }
+
+    // Validar formato correcto
+    const validImages = imagesArray.every(
+      img => img.url && img.public_id
+    );
+
+    if (!validImages && imagesArray.length > 0) {
+      return res.status(400).json({
+        message: "existingImages debe contener { url, public_id }"
+      });
     }
 
     const newImagesCount = req.files ? req.files.length : 0;
@@ -149,7 +170,21 @@ const updateSellerProduct = async (req, res) => {
       });
     }
 
-    // Subir nuevas imágenes a Cloudinary
+    // 2️⃣ 🔥 BORRAR IMÁGENES ELIMINADAS
+    const imagesToDelete = product.image.filter(
+      oldImg =>
+        !imagesArray.some(
+          img => img.public_id === oldImg.public_id
+        )
+    );
+
+    await Promise.all(
+      imagesToDelete.map(img =>
+        cloudinary.uploader.destroy(img.public_id)
+      )
+    );
+
+    // 3️⃣ SUBIR NUEVAS IMÁGENES
     if (req.files && req.files.length > 0) {
       const uploadedImages = await Promise.all(
         req.files.map(
@@ -158,8 +193,11 @@ const updateSellerProduct = async (req, res) => {
               const stream = cloudinary.uploader.upload_stream(
                 { folder: "productos_tienda" },
                 (error, result) => {
-                  if (error) reject(error);
-                  else resolve(result.secure_url);
+                  if (error) return reject(error);
+                  resolve({
+                    url: result.secure_url,
+                    public_id: result.public_id
+                  });
                 }
               );
               stream.end(file.buffer);
@@ -187,6 +225,7 @@ const updateSellerProduct = async (req, res) => {
       ? req.body.sise.split(",").map(s => s.trim())
       : product.sise;
 
+    // 4️⃣ Guardar solo las imágenes finales
     product.image = imagesArray;
 
     await product.save();
@@ -197,10 +236,11 @@ const updateSellerProduct = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error al actualizar producto" });
+    console.error("Error actualizando producto:", error);
+    res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
@@ -209,18 +249,46 @@ const updateSellerProduct = async (req, res) => {
 /**
  * Eliminar producto del vendedor
  */
+// const deleteSellerProduct = async (req, res) => {
+//   try {
+//     const sellerId = req.user.id;
+//     const { id } = req.params;
+
+//     const product = await Productos.findOne({ _id: id, vendedor: sellerId });
+//     if (!product)
+//       return res.status(404).json({ message: "Producto no encontrado o no es tuyo" });
+
+//     await Productos.findByIdAndDelete(id);
+//     res.json({ message: "Producto eliminado" });
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 const deleteSellerProduct = async (req, res) => {
   try {
-    const sellerId = req.user.id;
     const { id } = req.params;
 
-    const product = await Productos.findOne({ _id: id, vendedor: sellerId });
-    if (!product)
-      return res.status(404).json({ message: "Producto no encontrado o no es tuyo" });
+    const product = await Productos.findById(id);
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
 
+    // 🔥 ELIMINAR IMÁGENES DE CLOUDINARY
+    if (product.image && product.image.length > 0) {
+      await Promise.all(
+        product.image.map(img =>
+          cloudinary.uploader.destroy(img.public_id)
+        )
+      );
+    }
+
+    // 🗑 Eliminar producto de la DB
     await Productos.findByIdAndDelete(id);
-    res.json({ message: "Producto eliminado" });
+
+    res.json({ message: "Producto e imágenes eliminados correctamente" });
+
   } catch (error) {
+    console.error("Error eliminando producto:", error);
     res.status(500).json({ message: error.message });
   }
 };

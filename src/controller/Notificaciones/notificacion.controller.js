@@ -2,9 +2,130 @@ const Notification = require("../../models/Notification");
 const User = require("../../models/User");
 const { transporter, notificationMail } = require("../../mailer/nodemailer");
 
+
 /* ===================== OBTENER NOTIFICACIONES ===================== */
-const getNotifications = async (req, res) => {
+// Obtener notificaciones del USUARIO
+const getUserNotifications = async (req, res) => {
+  const userId = req.user.id;
+
+  const notifications = await Notification.find({
+    user: userId
+  })
+  .sort({ createdAt: -1 })
+  .limit(20);
+
+  res.json(notifications);
+};
+
+
+/* ===================== MARCAR COMO LEÍDA ===================== */
+const markAsRead = async (req, res) => {
+  const { id } = req.params;
+  
+  const notification = await Notification.findOneAndUpdate(
+    {
+      _id: id,
+      $or: [
+        { user: req.user._id },
+        { seller: req.user._id }
+      ]
+    },
+    { isRead: true },
+    { new: true }
+  );
+  
+  if (!notification) {
+    return res.status(404).json({ message: "No encontrada" });
+  }
+  
+  res.json(notification);
+};
+
+
+/* ===================== CREAR NOTIFICACIÓN + EMAIL ===================== */
+/* 👉 úsalo cuando se crea un pedido */
+const createNotification = async ({
+  userId,
+  sellerId,
+  messageUser,
+  messageSeller,
+  order,
+  status
+}) => {
   try {
+    /* ===================== USUARIO ===================== */
+    if (userId) {
+      const user = await User.findById(userId);
+      
+      if (user) {
+        // 🔔 Notificación usuario
+        await Notification.create({
+          user: userId,
+          type: "order",
+          message: messageUser,
+          status,
+          order: order?._id
+        });
+
+        // 📧 Correo usuario
+        if (user.email) {
+          try {
+            await transporter.sendMail(
+              notificationMail({
+                to: user.email,
+                subject: "📦 Actualización de tu pedido",
+                message: messageUser,
+                order,
+                status
+              })
+            );
+          } catch (mailError) {
+            console.error("❌ Error email usuario:", mailError);
+          }
+        }
+      }
+    }
+
+    /* ===================== VENDEDOR ===================== */
+    if (sellerId) {
+      const seller = await User.findById(sellerId);
+
+      if (seller) {
+        // 🔔 Notificación vendedor
+        await Notification.create({
+          seller: sellerId,
+          type: "order",
+          message: messageSeller,
+          status,
+          order: order?._id
+        });
+
+        // 📧 Correo vendedor
+        if (seller.email) {
+          try {
+            await transporter.sendMail(
+              notificationMail({
+                to: seller.email,
+                subject: "🛒 Nueva actividad en una venta",
+                message: messageSeller,
+                order,
+                status
+              })
+            );
+          } catch (mailError) {
+            console.error("❌ Error email vendedor:", mailError);
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error("❌ Error creando notificaciones:", error);
+  }
+};
+
+const getSellerNotifications = async (req, res) => {
+   try {
     const userId = req.user._id;
 
     const notifications = await Notification.find({ user: userId })
@@ -20,63 +141,33 @@ const getNotifications = async (req, res) => {
   }
 };
 
-/* ===================== MARCAR COMO LEÍDA ===================== */
-const markAsRead = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const notification = await Notification.findOneAndUpdate(
-      { _id: id, user: req.user._id },
-      { isRead: true },
-      { new: true }
-    );
 
-    if (!notification) {
-      return res.status(404).json({
-        message: "Notificación no encontrada",
-      });
-    }
 
-    return res.status(200).json({
-      message: "Notificación marcada como leída",
-      notification,
-    });
-  } catch (error) {
-    console.error("Error al marcar notificación:", error);
-    return res.status(500).json({
-      message: "Error interno",
-    });
-  }
-};
 
-/* ===================== CREAR NOTIFICACIÓN + EMAIL ===================== */
-/* 👉 úsalo cuando se crea un pedido */
-const createNotification = async ({ userId, message, order }) => {
-  const user = await User.findById(userId);
-  if (!user) return;
-
-  const notification = await Notification.create({
-    user: userId,
-    message,
-    order: order?._id,
-    isRead: false,
-  });
-
-  // Enviar correo (NO afecta bienvenida)
-  await transporter.sendMail(
-    notificationMail({
-      email: user.email,
-      name: user.storeName || user.name,
-      message,
-      order,
-    })
-  );
-
-  return notification;
-};
 
 module.exports = {
-  getNotifications,
+  getUserNotifications,
   markAsRead,
   createNotification,
+  getSellerNotifications
 };
+
+// getStoreNotifications
+// Obtener notificaciones de la TIENDA 
+// const getStoreNotifications = async (req, res) => {
+//   try {
+//     const sellerId = req.user._id;
+
+//     const notifications = await Notification.find({
+//       seller: sellerId
+//     })
+//       .sort({ createdAt: -1 })
+//       .populate("order", "total status");
+
+//     res.json(notifications);
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: "Error interno" });
+//   }
+// };

@@ -7,8 +7,9 @@ const {
   EliminarFavorito,
   verFavoritos
 } = require("../../controller/User/favorites.controller");
+const authMiddleware = require("../../middleware/sesion");
 
 router.post("/favorite/:productId", auth, AgregarFavorito);
 router.delete("/favoriteDelete/:productId", auth, EliminarFavorito);
-router.get("/favorito/all", verFavoritos);
+router.get("/favorito/all",authMiddleware, verFavoritos);
 module.exports = router;
