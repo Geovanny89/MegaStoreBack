@@ -28,8 +28,14 @@ const suscripcionSchema = new mongoose.Schema({
     default: null
   },
 
-  fecha_inicio: Date,
-  fecha_vencimiento: Date
+ fecha_inicio: {
+  type: Date,
+  default: null
+},
+fecha_vencimiento: {
+  type: Date,
+  default: null
+}
 
 }, { timestamps: true });
 

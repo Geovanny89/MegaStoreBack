@@ -49,7 +49,8 @@ const userSchema = new mongoose.Schema({
       "pending_payment",
       "pending_review",
       "active",
-      "rejected"
+      "rejected",
+      "expired"
     ],
     default: function () {
       return this.rol === "seller" ? "pending_payment" : "active";
