@@ -13,6 +13,7 @@ const register = async (req, res) => {
   try {
     const data = matchedData(req);
 
+    // 1. Verificar si el correo ya existe
     const existingUser = await User.findOne({ email: data.email });
     if (existingUser) {
       return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
@@ -22,8 +23,9 @@ const register = async (req, res) => {
 
     let plan = null;
     let storeLogoUrl = null;
-    let generatedSlug = null; // Variable para el slug
+    let generatedSlug; // Se queda como undefined inicialmente
 
+    // 2. Lógica específica para Vendedores (Sellers)
     if (data.rol === "seller") {
       if (!data.storeName) {
         return res.status(400).json({ error: "Los sellers deben enviar storeName" });
@@ -32,7 +34,6 @@ const register = async (req, res) => {
       // --- GENERACIÓN DEL SLUG ---
       generatedSlug = slugify(data.storeName, { lower: true, strict: true });
       
-      // Validar si el slug ya existe para evitar errores de duplicado
       const existingSlug = await User.findOne({ slug: generatedSlug });
       if (existingSlug) {
         generatedSlug = `${generatedSlug}-${crypto.randomBytes(2).toString('hex')}`;
@@ -52,6 +53,7 @@ const register = async (req, res) => {
         return res.status(404).json({ error: "El plan seleccionado no existe o está inactivo" });
       }
 
+      // Subida de imagen a Cloudinary
       storeLogoUrl = await new Promise((resolve, reject) => {
         const upload = cloudinary.uploader.upload_stream(
           { folder: "store_logos" },
@@ -64,19 +66,24 @@ const register = async (req, res) => {
       });
     }
 
-const newUser = new User({
-  ...data,
-  password: hashedPassword,
-  image: storeLogoUrl,
-  slug: generatedSlug,
-  sellerStatus: data.rol === "seller" ? "pending_payment" : "active"
+    // 3. Crear el objeto del usuario dinámicamente
+    const userData = {
+      ...data,
+      password: hashedPassword,
+      image: storeLogoUrl,
+      sellerStatus: data.rol === "seller" ? "pending_payment" : "active"
+    };
 
-});
+    // SOLO agregamos el campo slug si existe (esto evita el error E11000 en clientes)
+    if (generatedSlug) {
+      userData.slug = generatedSlug;
+    }
 
+    const newUser = new User(userData);
     await newUser.save();
 
-    if (data.rol === "seller") {
-      // ... (tu lógica de suscripción se mantiene igual)
+    // 4. Lógica de suscripción para Sellers
+    if (data.rol === "seller" && plan) {
       const fechaInicio = new Date();
       const fechaVencimiento = new Date();
       fechaVencimiento.setMonth(fechaVencimiento.getMonth() + plan.duracion_meses);
@@ -90,23 +97,22 @@ const newUser = new User({
       });
     }
 
+    // 5. Envío de correo de bienvenida
     const welcomeEmail = mailDetails(newUser.email, newUser.name);
     await transporter.sendMail(welcomeEmail);
 
-    // RESPUESTA FINAL ENRIQUECIDA
+    // 6. Respuesta al cliente
     res.status(201).json({
-  message: data.rol === "seller"
-    ? "Registro exitoso. Debes enviar el comprobante de pago para activar tu tienda."
-    : "Usuario registrado correctamente",
-
-  usuario: newUser,
-  storeUrl: generatedSlug ? `/tienda/${generatedSlug}` : null,
-  nextStep: data.rol === "seller" ? "upload-payment-proof" : null
-});
-
+      message: data.rol === "seller"
+        ? "Registro exitoso. Debes enviar el comprobante de pago para activar tu tienda."
+        : "Usuario registrado correctamente",
+      usuario: newUser,
+      storeUrl: generatedSlug ? `/tienda/${generatedSlug}` : null,
+      nextStep: data.rol === "seller" ? "upload-payment-proof" : null
+    });
 
   } catch (error) {
-    console.error(error);
+    console.error("ERROR EN REGISTER:", error);
     res.status(500).json({ message: "Error al registrar el usuario" });
   }
 };
@@ -121,8 +127,7 @@ const login = async (req, res) => {
     }
 
     const hashPassword = user.password;
-    console.log("Contraseña almacenada en la base de datos:", hashPassword);
-    console.log("Contraseña proporcionada en la solicitud:", requestData.password);
+
 
     const check = await compare(requestData.password, hashPassword);
     console.log("Resultado de la comparación de contraseñas:", check);

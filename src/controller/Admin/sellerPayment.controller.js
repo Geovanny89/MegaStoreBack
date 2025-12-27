@@ -90,59 +90,64 @@ const getSellerMe = async (req, res) => {
     const now = new Date();
 
     /* =========================================
-       1️⃣ CALCULAR SI ESTÁ VENCIDA (SIN PISAR PAGO)
+       1️⃣ ESTADO BASE (SEGÚN PAGO)
     ========================================= */
-    let isExpired = false;
+   let sellerStatus = seller.sellerStatus;
 
-    if (
-      !suscripcion ||
-      suscripcion.estado === "vencida" ||
-      (suscripcion.fecha_vencimiento && now > suscripcion.fecha_vencimiento)
-    ) {
-      isExpired = true;
+if (!suscripcion || suscripcion.estado === "pendiente") {
+  sellerStatus = "pending_payment";
+}
 
-      if (suscripcion && suscripcion.estado !== "vencida") {
-        suscripcion.estado = "vencida";
-        await suscripcion.save();
-      }
-    }
+if (suscripcion?.estado === "en_revision") {
+  sellerStatus = "pending_review";
+}
+
+if (suscripcion?.estado === "rechazada") {
+  sellerStatus = "rejected";
+}
+
+/* 🔴 ESTE ERA EL BLOQUE QUE FALTABA */
+if (suscripcion?.estado === "vencida") {
+  sellerStatus = "expired";
+}
+
+/* =========================================
+   SOLO SI ESTÁ ACTIVA, VALIDAR FECHA
+========================================= */
+if (
+  suscripcion?.estado === "activa" &&
+  suscripcion.fecha_vencimiento &&
+  now > suscripcion.fecha_vencimiento
+) {
+  suscripcion.estado = "vencida";
+  sellerStatus = "expired";
+  await suscripcion.save();
+}
+
 
     /* =========================================
-       2️⃣ DEFINIR sellerStatus SOLO POR ACCESO
+       3️⃣ SINCRONIZAR SELLER
     ========================================= */
-    let sellerStatus = "active";
-
-    if (isExpired) {
-      sellerStatus = "expired";
-    }
-
-    if (suscripcion?.estado === "en_revision") {
-      sellerStatus = "pending_review";
-    }
-
-    // ⛔ NO CAMBIAMOS sellerStatus SI EL PAGO FUE RECHAZADO
-    // rejected es SOLO información de UI
-
     if (seller.sellerStatus !== sellerStatus) {
       seller.sellerStatus = sellerStatus;
       await seller.save();
     }
 
-    /* =========================================
-       3️⃣ RESPUESTA COMPLETA (CLAVE)
-    ========================================= */
     return res.json({
-      sellerStatus,                 // acceso
-      paymentStatus: suscripcion?.estado || null, // estado del pago
+      sellerStatus,
+      paymentStatus: suscripcion?.estado || null,
       seller,
       suscripcion
     });
 
   } catch (error) {
     console.error("❌ Error seller/me:", error);
-    return res.status(500).json({ message: "Error obteniendo estado del seller" });
+    return res.status(500).json({
+      message: "Error obteniendo estado del seller"
+    });
   }
 };
+
 
 
 

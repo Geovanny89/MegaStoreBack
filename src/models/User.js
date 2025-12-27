@@ -102,6 +102,9 @@ userSchema.pre("save", async function (next) {
     while (await mongoose.models.User.findOne({ slug })) {
       slug = `${baseSlug}-${count++}`;
     }
+    if (this.rol !== "seller") {
+    this.slug = undefined; 
+  }
 
     this.slug = slug;
   }
