@@ -28,6 +28,21 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  storeCategory: {
+  type: String,
+  enum: [
+    "Tecnología", 
+    "Moda", 
+    "Ferretería", 
+    "Supermercado", 
+    "Hogar", 
+    "Belleza", 
+    "Deportes",
+    "Otros"
+  ],
+  default: null,
+  index: true // Indexar para búsquedas rápidas
+},
 
   slug: {
     type: String,
