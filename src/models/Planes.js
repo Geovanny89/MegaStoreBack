@@ -5,7 +5,7 @@ const planSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    enum: ["basico", "avanzado"]
+    enum: ["Emprendedor", "Premium"]
   },
 
   // precio mensual dependiendo del tipo de plan
