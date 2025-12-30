@@ -8,23 +8,34 @@ const User = require('../../models/User');
 const verProductosEnCarrito = async (req, res) => {
   try {
     const userId = req.user._id;
-    const carrito = await Carrito.findOne({ user: userId }).populate('items.product');
 
-    // Si el carrito no existe → devolver vacío con 200
+    // CAMBIO AQUÍ: Hacemos populate del producto Y del vendedor dentro del producto
+    const carrito = await Carrito.findOne({ user: userId }).populate({
+      path: 'items.product',
+      populate: {
+        path: 'vendedor',
+        select: 'paymentMethods storeName slug' // Solo traemos lo que necesitamos
+      }
+    });
+
     if (!carrito) {
       return res.status(200).json({ items: [] });
     }
 
-    // Filtrar productos eliminados
+    // Filtrar productos que pudieron ser eliminados de la DB
     const itemsLimpios = carrito.items.filter(item => item.product !== null);
 
-    return res.status(200).json({ items: itemsLimpios });
+    // Enviamos una respuesta enriquecida
+    return res.status(200).json({ 
+      items: itemsLimpios,
+      // Opcional: Enviamos los métodos del primer vendedor para facilitar el acceso en el front
+      paymentMethods: itemsLimpios.length > 0 ? itemsLimpios[0].product.vendedor?.paymentMethods : []
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error retrieving carrito." });
   }
-}; 
-
+};
 
 
 // ========================
@@ -140,7 +151,7 @@ const verCarritoPorTienda = async (req, res) => {
         match: { vendedor: vendedor._id }, // Solo productos que pertenecen a este vendedor
         populate: { 
           path: 'vendedor', 
-          select: 'storeName image slug paymentMethods' // Traemos info útil de la tienda
+          select: 'image slug paymentMethods storeName' // Traemos info útil de la tienda
         }
       });
 

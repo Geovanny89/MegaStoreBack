@@ -16,7 +16,8 @@ const vendedor = async (req, res) => {
 
     // 4. Ejecutamos la búsqueda con el filtro dinámico
     const vendedorAll = await User.find(query)
-      .select("storeName storeLogo email phone rol image storeCategory"); // Agregué storeCategory
+      .select("storeName storeLogo email phone rol image storeCategory subscriptionPlan") 
+      .populate("subscriptionPlan", "nombre price");
 
     if (!vendedorAll || vendedorAll.length === 0) {
       // Devolvemos un array vacío en lugar de 404 para que el frontend 

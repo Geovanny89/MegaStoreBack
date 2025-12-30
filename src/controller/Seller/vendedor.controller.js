@@ -32,46 +32,50 @@ const updatePerfilVendedor = async (req, res) => {
     const updates = {};
 
     /* ================= DATOS BÁSICOS ================= */
-
     if (req.body.name) updates.name = req.body.name;
     if (req.body.lastName) updates.lastName = req.body.lastName;
     if (req.body.phone) updates.phone = req.body.phone;
     if (req.body.storeName) updates.storeName = req.body.storeName;
 
-    /* ================= TELÉFONOS DE PAGO ================= */
+    /* ================= MÉTODOS DE PAGO ================= */
+    // Construimos un array de paymentMethods dinámico
+    const paymentMethods = [];
 
-    if (req.body["paymentMethods.nequi.phone"]) {
-      updates["paymentMethods.nequi.phone"] =
-        req.body["paymentMethods.nequi.phone"];
+    if (req.body["paymentMethods.nequi.value"] || req.files?.nequiQR?.[0]) {
+      paymentMethods.push({
+        provider: "nequi",
+        type: "phone",
+        value: req.body["paymentMethods.nequi.value"] || req.body.phone || "",
+        qr: req.files?.nequiQR?.[0]
+          ? await uploadBufferToCloudinary(
+              req.files.nequiQR[0].buffer,
+              "payments/qr/nequi"
+            )
+          : null,
+        active: true
+      });
     }
 
-    if (req.body["paymentMethods.daviplata.phone"]) {
-      updates["paymentMethods.daviplata.phone"] =
-        req.body["paymentMethods.daviplata.phone"];
+    if (req.body["paymentMethods.llaves.value"] || req.files?.llavesQR?.[0]) {
+      paymentMethods.push({
+        provider: "llaves", // aquí tu nuevo nombre de provider
+        type: "random",
+        value: req.body["paymentMethods.llaves.value"] || req.body.phone || "",
+        qr: req.files?.llavesQR?.[0]
+          ? await uploadBufferToCloudinary(
+              req.files.llavesQR[0].buffer,
+              "payments/qr/llaves"
+            )
+          : null,
+        active: true
+      });
     }
 
-    /* ================= QR NEQUI ================= */
-
-    if (req.files?.nequiQR?.[0]) {
-      const nequiQRUrl = await uploadBufferToCloudinary(
-        req.files.nequiQR[0].buffer,
-        "payments/qr/nequi"
-      );
-      updates["paymentMethods.nequi.qr"] = nequiQRUrl;
-    }
-
-    /* ================= QR DAVIPLATA ================= */
-
-    if (req.files?.daviplataQR?.[0]) {
-      const daviplataQRUrl = await uploadBufferToCloudinary(
-        req.files.daviplataQR[0].buffer,
-        "payments/qr/daviplata"
-      );
-      updates["paymentMethods.daviplata.qr"] = daviplataQRUrl;
+    if (paymentMethods.length > 0) {
+      updates.paymentMethods = paymentMethods;
     }
 
     /* ================= ACTUALIZAR ================= */
-
     const updated = await User.findByIdAndUpdate(
       userId,
       { $set: updates },
@@ -85,11 +89,11 @@ const updatePerfilVendedor = async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error actualizando vendedor:", error);
-    return res.status(500).json({
-      message: "Error al actualizar perfil"
-    });
+    return res.status(500).json({ message: "Error al actualizar perfil" });
   }
 };
+
+
 
 
 

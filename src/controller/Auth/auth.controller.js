@@ -50,31 +50,56 @@ const registerUser = async (req, res) => {
 const registerSeller = async (req, res) => {
   try {
     const data = matchedData(req);
-    
-    // 1. Validaciones iniciales de negocio
-    if (!data.storeName) return res.status(400).json({ error: "El nombre de la tienda es obligatorio" });
-    if (!data.planId) return res.status(400).json({ error: "Debes seleccionar un plan" });
-    if (!req.file) return res.status(400).json({ error: "El logo de la tienda es obligatorio" });
-    
-    // NUEVA VALIDACIÓN: Categoría de tienda
+
+    /* ===============================
+       1. VALIDACIONES DE NEGOCIO
+    ================================ */
+    if (!data.storeName) {
+      return res.status(400).json({ error: "El nombre de la tienda es obligatorio" });
+    }
+
+    if (!data.planId) {
+      return res.status(400).json({ error: "Debes seleccionar un plan" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "El logo de la tienda es obligatorio" });
+    }
+
     if (!data.storeCategory) {
       return res.status(400).json({ error: "Debes seleccionar una categoría para tu tienda" });
     }
 
     const existingUser = await User.findOne({ email: data.email });
-    if (existingUser) return res.status(400).json({ error: 'El correo ya está registrado' });
-
-    const plan = await Planes.findOne({ _id: data.planId, estado: "activo" });
-    if (!plan) return res.status(404).json({ error: "Plan inválido o inactivo" });
-
-    // 2. Generación de Slug
-    let generatedSlug = slugify(data.storeName, { lower: true, strict: true });
-    const existingSlug = await User.findOne({ slug: generatedSlug });
-    if (existingSlug) {
-      generatedSlug = `${generatedSlug}-${crypto.randomBytes(2).toString('hex')}`;
+    if (existingUser) {
+      return res.status(400).json({ error: "El correo ya está registrado" });
     }
 
-    // 3. Subida de Logo a Cloudinary
+    /* ===============================
+       2. VALIDAR PLAN
+    ================================ */
+    const plan = await Planes.findOne({
+      _id: data.planId,
+      estado: "activo"
+    });
+
+    if (!plan) {
+      return res.status(404).json({ error: "Plan inválido o inactivo" });
+    }
+
+    /* ===============================
+       3. GENERAR SLUG ÚNICO
+    ================================ */
+    let generatedSlug = slugify(data.storeName, { lower: true, strict: true });
+
+    const slugExists = await User.findOne({ slug: generatedSlug });
+    if (slugExists) {
+      generatedSlug = `${generatedSlug}-${crypto.randomBytes(2).toString("hex")}`;
+    }
+
+    /* ===============================
+       4. SUBIR LOGO A CLOUDINARY
+    ================================ */
     const storeLogoUrl = await new Promise((resolve, reject) => {
       const upload = cloudinary.uploader.upload_stream(
         { folder: "store_logos" },
@@ -86,23 +111,37 @@ const registerSeller = async (req, res) => {
       upload.end(req.file.buffer);
     });
 
-    // 4. Crear Usuario Vendedor (Se agrega storeCategory)
+    /* ===============================
+       5. CREAR USUARIO VENDEDOR
+       🔑 AQUÍ ESTABA EL ERROR
+    ================================ */
     const hashedPassword = await encrypt(data.password);
+
     const newUser = new User({
-      ...data,
+      name: data.name,
+      email: data.email,
       password: hashedPassword,
       image: storeLogoUrl,
       slug: generatedSlug,
-      storeCategory: data.storeCategory, // <--- GUARDAMOS LA CATEGORÍA
+      storeName: data.storeName,
+      storeCategory: data.storeCategory,
       rol: "seller",
-      sellerStatus: "pending_payment"
+      sellerStatus: "pending_payment",
+
+      // 🔑 ASIGNAMOS EL PLAN AL USUARIO
+      subscriptionPlan: plan._id
     });
+
     await newUser.save();
 
-    // 5. Crear Suscripción (Lógica existente...)
+    /* ===============================
+       6. CREAR SUSCRIPCIÓN (HISTORIAL)
+    ================================ */
     const fechaInicio = new Date();
     const fechaVencimiento = new Date();
-    fechaVencimiento.setMonth(fechaVencimiento.getMonth() + plan.duracion_meses);
+    fechaVencimiento.setMonth(
+      fechaVencimiento.getMonth() + plan.duracion_meses
+    );
 
     await Suscripciones.create({
       id_usuario: newUser._id,
@@ -112,10 +151,14 @@ const registerSeller = async (req, res) => {
       estado: "pendiente"
     });
 
-    // 6. Correo y Respuesta
-    await transporter.sendMail(mailDetails(newUser.email, newUser.name));
+    /* ===============================
+       7. EMAIL + RESPUESTA
+    ================================ */
+    await transporter.sendMail(
+      mailDetails(newUser.email, newUser.name)
+    );
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Registro de vendedor exitoso. Pendiente de pago.",
       usuario: newUser,
       storeUrl: `/tienda/${generatedSlug}`
@@ -123,9 +166,12 @@ const registerSeller = async (req, res) => {
 
   } catch (error) {
     console.error("ERROR EN REGISTER_SELLER:", error);
-    res.status(500).json({ message: "Error al registrar el vendedor" });
+    return res.status(500).json({
+      message: "Error al registrar el vendedor"
+    });
   }
 };
+
 
 const login = async (req, res) => {
   try {

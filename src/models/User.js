@@ -84,16 +84,40 @@ const userSchema = new mongoose.Schema({
   },
 
   /* ================= MÉTODOS DE PAGO ================= */
-  paymentMethods: {
-    nequi: {
-      phone: String,
-      qr: String
+  paymentMethods: [
+  {
+    type: {
+      type: String,
+      enum: ["phone", "email", "document", "random"],
+      required: true
     },
-    daviplata: {
-      phone: String,
-      qr: String
+    value: {
+      type: String,
+      required: true
+    },
+    provider: {
+      type: String,
+      enum: ["nequi", "daviplata", "bancolombia", "bbva","llaves", "otro"],
+      required: true
+    },
+    qr: {
+      type: String,
+      default: null
+    },
+    active: {
+      type: Boolean,
+      default: true
     }
+  }
+],
+    /* ================= PLAN DE SUSCRIPCIÓN ================= */
+  subscriptionPlan: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Planes",
+    default: null,
+    index: true
   },
+
 
   /* ================= RATING ================= */
   sellerRating: {

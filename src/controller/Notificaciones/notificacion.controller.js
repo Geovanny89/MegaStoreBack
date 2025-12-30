@@ -123,12 +123,13 @@ const createNotification = async ({
     console.error("❌ Error creando notificaciones:", error);
   }
 };
-
 const getSellerNotifications = async (req, res) => {
-   try {
-    const userId = req.user._id;
+  try {
+    // 1. Obtenemos el ID del vendedor logueado
+    const userId = req.user.id; 
 
-    const notifications = await Notification.find({ user: userId })
+    // 2. Buscamos en el campo 'seller' (porque así lo definimos en el modelo y en el createOrder)
+    const notifications = await Notification.find({ seller: userId }) // 👈 CAMBIO AQUÍ
       .sort({ createdAt: -1 })
       .populate("order", "total deliveryMethod paymentMethod status");
 
@@ -140,7 +141,6 @@ const getSellerNotifications = async (req, res) => {
     });
   }
 };
-
 
 
 

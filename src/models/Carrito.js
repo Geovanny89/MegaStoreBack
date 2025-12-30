@@ -17,7 +17,7 @@ const carritoSchema = mongoose.Schema({
   ],
   user: {
     type: Schema.Types.ObjectId,
-    ref: 'Usuario', // Asociar con tu modelo de usuario si es necesario
+    ref: 'User', // Asociar con tu modelo de usuario si es necesario
   },
 });
 

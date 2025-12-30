@@ -22,7 +22,7 @@ const getMyOrders = async (req, res) => {
     res.json(orders);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error obteniendo órdenes" });
+    res.status(500).json({ message: "Error obteniendo órdenes" }); 
   }
 };
 
@@ -66,33 +66,29 @@ const createOrder = async (req, res) => {
       paymentMethod
     } = req.body;
 
+    // 1. Validaciones iniciales
     if (!products || products.length === 0) {
-      return res.status(400).json({ message: "No hay productos" });
+      return res.status(400).json({ message: "No hay productos en la orden" });
     }
 
     if (!deliveryMethod || !paymentMethod) {
-      return res.status(400).json({
-        message: "Método de entrega y pago son obligatorios"
-      });
+      return res.status(400).json({ message: "Método de entrega y pago son obligatorios" });
     }
 
     if (deliveryMethod === "delivery" && !shippingAddress) {
-      return res.status(400).json({
-        message: "La dirección es obligatoria"
-      });
+      return res.status(400).json({ message: "La dirección de envío es obligatoria para domicilios" });
     }
 
     let total = 0;
     const orderProducts = [];
     const sellerSet = new Set();
 
+    // 2. Procesar productos y verificar vendedor único
     for (const item of products) {
       const product = await Productos.findById(item.productId);
 
       if (!product) {
-        return res.status(404).json({
-          message: `Producto no encontrado`
-        });
+        return res.status(404).json({ message: `Producto no encontrado` });
       }
 
       total += product.price * item.quantity;
@@ -109,37 +105,40 @@ const createOrder = async (req, res) => {
     }
 
     if (sellerSet.size > 1) {
-      return res.status(400).json({
-        message: "Solo un vendedor por orden"
-      });
+      return res.status(400).json({ message: "Solo puedes comprar a un vendedor por orden" });
     }
 
     const sellerId = [...sellerSet][0];
     const seller = await User.findById(sellerId);
 
     if (!seller || seller.rol !== "seller") {
-      return res.status(400).json({ message: "Vendedor inválido" });
+      return res.status(400).json({ message: "El vendedor no es válido" });
     }
 
+    // 3. Lógica de Pago Corregida (Para Estructura de Array)
     let paymentInfo = null;
 
     if (paymentMethod !== "cash_on_delivery") {
-      const methodData = seller.paymentMethods?.[paymentMethod];
+      const targetProvider = paymentMethod === "daviplata" ? "llaves" : paymentMethod;
 
-      if (!methodData?.phone) {
+      const methodData = seller.paymentMethods.find(
+        (m) => m.provider.toLowerCase() === targetProvider.toLowerCase()
+      );
+
+      if (!methodData || !methodData.value) {
         return res.status(400).json({
-          message: `El vendedor no tiene ${paymentMethod}`
+          message: `El vendedor no tiene configurado ${paymentMethod} como método de recaudo.`
         });
       }
 
       paymentInfo = {
         method: paymentMethod,
-        phone: methodData.phone,
+        phone: methodData.value,
         qr: methodData.qr || null
       };
     }
 
-    // ✅ CREAR ORDEN
+    // 4. Crear la orden
     const order = await Order.create({
       user: userId,
       products: orderProducts,
@@ -154,7 +153,19 @@ const createOrder = async (req, res) => {
       status: "pending_payment"
     });
 
-    // 🔥 VACIAR CARRITO (ESTA ERA LA PIEZA QUE FALTABA)
+    /* ============================================================
+       🔥 NUEVO: NOTIFICACIÓN PARA EL VENDEDOR
+       ============================================================ */
+    await Notification.create({
+      seller: sellerId, // Usamos el campo seller para el panel del vendedor
+      type: "order",
+      order: order._id,
+      message: `¡Nueva venta! El cliente ha generado la orden #${order._id}.`,
+      status: "pending",
+      isRead: false
+    });
+
+    // 5. Vaciar carrito del usuario
     await Carrito.findOneAndUpdate(
       { user: userId },
       { $set: { items: [] } }
@@ -166,8 +177,8 @@ const createOrder = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("createOrder:", error);
-    res.status(500).json({ message: "Error al crear la orden" });
+    console.error("Error en createOrder:", error);
+    res.status(500).json({ message: "Error interno al procesar la orden" });
   }
 };
 
@@ -201,29 +212,37 @@ const markOrderReceived = async (req, res) => {
     order.status = "delivered";
     await order.save();
 
+    // 1. Notificación para el COMPRADOR (Actualiza la existente)
     await Notification.findOneAndUpdate(
       { user: buyerId, order: order._id },
       {
+        user: buyerId, // Aseguramos que se mantenga el ID del comprador
         message: `Confirmaste la recepción del pedido #${order._id}`,
         status: "delivered",
-        isRead: false
+        type: "order",
+        isRead: false,
+        createdAt: new Date() // Esto hace que vuelva a subir al inicio en el panel
       },
-      { upsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
     const sellerIds = [
       ...new Set(order.products.map(p => p.seller.toString()))
     ];
 
+    // 2. Notificación para el VENDEDOR (Actualiza la misma notificación que se creó al inicio)
     for (const sellerId of sellerIds) {
       await Notification.findOneAndUpdate(
-        { user: sellerId, order: order._id },
+        { seller: sellerId, order: order._id }, // Busca la notificación original de esta orden
         {
+          seller: sellerId,                      // Mantiene el ID del vendedor
           message: `El comprador confirmó la recepción del pedido #${order._id}`,
-          status: "delivered",
-          isRead: false
+          status: "delivered",                   // Cambia el estado (y el color en el front)
+          type: "order",
+          isRead: false,                         // La marca como nueva/no leída
+          createdAt: new Date()                  // La pone de primero en la lista del vendedor
         },
-        { upsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
     }
 
@@ -239,9 +258,6 @@ const markOrderReceived = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 
@@ -298,6 +314,28 @@ const uploadPaymentProof = async (req, res) => {
     };
 
     await order.save();
+
+    /* ============================================================
+        🔔 ACTUALIZACIÓN: NOTIFICACIÓN PARA EL VENDEDOR (Sin duplicar)
+       ============================================================ */
+    const sellerId = order.products[0]?.seller;
+
+    if (sellerId) {
+      // 1. Buscamos por la combinación de orden y vendedor
+      // 2. Actualizamos el mensaje y el estado
+      await Notification.findOneAndUpdate(
+        { order: order._id, seller: sellerId }, 
+        {
+          seller: sellerId,
+          type: "order",
+          message: `El cliente ha subido un comprobante de pago para la orden #${order._id}. Pendiente de revisión.`,
+          status: "paid", // Este estado hará que cambie de color en tu frontend
+          isRead: false,  // Se vuelve a poner en "no leído" para alertar al vendedor
+          createdAt: new Date() // Actualizamos la fecha para que suba en la lista
+        },
+        { upsert: true, new: true } // upsert: true crea la notificación si es la primera vez
+      );
+    }
 
     res.json({
       message: "Comprobante enviado correctamente",
