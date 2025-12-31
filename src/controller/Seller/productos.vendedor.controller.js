@@ -45,11 +45,11 @@ const createSellerProduct = async (req, res) => {
     }
 
     const limite =
-      suscripcion.plan_id.nombre === "basico"
-        ? 15
-        : suscripcion.plan_id.nombre === "avanzado"
-        ? 50
-        : null;
+      suscripcion.plan_id.nombre === "emprendedor"
+        ? 20
+        : suscripcion.plan_id.nombre === "premium"
+          ? 80
+          : null;
 
     const cantidad = await Productos.countDocuments({ vendedor: sellerId });
 
@@ -68,30 +68,30 @@ const createSellerProduct = async (req, res) => {
     const colorsArray = color ? color.split(",").map((c) => c.trim()) : [];
 
     // Subir imágenes a Cloudinary
-   const imageUrls = await Promise.all(
-  req.files.map(file => {
-    if (!file.buffer) {
-      throw new Error("Archivo de imagen inválido");
-    }
-
-    return new Promise((resolve, reject) => {
-      const upload = cloudinary.uploader.upload_stream(
-        {
-          folder: "productos_tienda",
-          resource_type: "image"
-        },
-        (err, result) => {
-          if (err) return reject(err);
-          resolve({
-            url: result.secure_url,
-            public_id: result.public_id
-          });
+    const imageUrls = await Promise.all(
+      req.files.map(file => {
+        if (!file.buffer) {
+          throw new Error("Archivo de imagen inválido");
         }
-      );
-      upload.end(file.buffer);
-    });
-  })
-);
+
+        return new Promise((resolve, reject) => {
+          const upload = cloudinary.uploader.upload_stream(
+            {
+              folder: "productos_tienda",
+              resource_type: "image"
+            },
+            (err, result) => {
+              if (err) return reject(err);
+              resolve({
+                url: result.secure_url,
+                public_id: result.public_id
+              });
+            }
+          );
+          upload.end(file.buffer);
+        });
+      })
+    );
 
 
     const nuevoProducto = new Productos({

@@ -7,7 +7,7 @@ const vendedor = async (req, res) => {
     const { categoria } = req.query;
 
     // 2. Definimos el filtro base (siempre que sean sellers)
-    let query = { rol: "seller" };
+    let query = { rol: "seller",sellerStatus:"active" };
 
     // 3. Si el usuario envió una categoría y no es "Todas", la agregamos al filtro
     if (categoria && categoria !== "Todas") {
