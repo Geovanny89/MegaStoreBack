@@ -62,6 +62,7 @@ const {
   deleteSellerProduct
 } = require("../../controller/Seller/productos.vendedor.controller");
 const { sellerActiveMiddleware } = require("../../middleware/sellerActiveMiddleware");
+const requireSellerVerified = require("../../middleware/requireSellerVerified");
 
 // RUTAS ACTUALIZADAS
 router.get("/seller/productos", authMiddleware, checkRol(["seller"]), getMyProducts);
@@ -70,8 +71,9 @@ router.get("/seller/productos", authMiddleware, checkRol(["seller"]), getMyProdu
 router.post(
     "/seller/productos", 
     authMiddleware, 
+    checkRol(["seller"]),
+    requireSellerVerified, 
     sellerActiveMiddleware, 
-    checkRol(["seller"]), 
     uploadWithCustomError, // <--- CAMBIO AQUÍ
     createSellerProduct
 );
@@ -79,12 +81,13 @@ router.post(
 router.put(
     "/seller/productos/:id", 
     authMiddleware, 
-    sellerActiveMiddleware, 
     checkRol(["seller"]), 
+    requireSellerVerified,
+    sellerActiveMiddleware, 
     uploadWithCustomError, // <--- CAMBIO AQUÍ
     updateSellerProduct
 );
 
-router.delete("/seller/productos/:id", authMiddleware, sellerActiveMiddleware, checkRol(["seller"]), deleteSellerProduct);
+router.delete("/seller/productos/:id", authMiddleware, sellerActiveMiddleware, checkRol(["seller"]),requireSellerVerified, deleteSellerProduct);
 
 module.exports = router;

@@ -2,17 +2,26 @@ const nodemailer = require("nodemailer");
 const path = require("path");
 require("dotenv").config();
 
-const { NODEMAILER } = process.env;
+// Extraemos las nuevas variables de Hostinger
+const { EMAIL_USER, EMAIL_PASS } = process.env;
 
-/* ===================== TRANSPORTER ===================== */
+/* ===================== TRANSPORTER (HOSTINGER) ===================== */
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.hostinger.com",
+  port: 465,
+  secure: true, // SSL
   auth: {
-    user: "pruebadesarrollo2184@gmail.com",
-    pass: NODEMAILER,
+    user: EMAIL_USER, // Tu correo oficial: ejemplo@k-dice.com
+    pass: EMAIL_PASS, // Tu contraseña de Hostinger
   },
+  tls: {
+    rejectUnauthorized: false // Evita problemas de certificados en el VPS
+  }
 });
 
+// Definimos el remitente oficial para todas las plantillas
+const OFFICIAL_FROM = `"K-DICE Marketplace" <${EMAIL_USER}>`;
+const logoPath = path.join(__dirname, "..", "..", "assets", "logo3.png");
 
 /* ===================== CORREO BIENVENIDA (REDISEÑADO) ===================== */
 const mailDetails = (email, name) => {
@@ -23,112 +32,116 @@ const mailDetails = (email, name) => {
     day: "numeric",
   });
 
-  const logoPath = path.join(
-    __dirname,
-    "..",
-    "..",
-    "..",
-    "client",
-    "src",
-    "Assets",
-    "logo-1.png"
-  );
-
   return {
-    from: '"JMG STORE" <pruebadesarrollo2184@gmail.com>',
+    from: OFFICIAL_FROM,
     to: email,
-    subject: "✨ ¡Bienvenido a la familia JMG STORE! ✨",
+    subject: "Bienvenido a K-DICE | Tu experiencia premium en marketplace",
     html: `
-      <div style="max-width: 600px; margin: auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; color: #333;">
-        
-        <div style="background-color: #2563eb; padding: 30px; text-align: center;">
-          <img src="cid:logo" alt="JMG STORE" style="max-width: 150px; margin-bottom: 10px;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">¡Hola, ${name}!</h1>
+      <div style="max-width: 600px; margin: auto; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; border: 1px solid #eee; border-radius: 16px; overflow: hidden; color: #2d3748; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); padding: 40px 20px; text-align: center;">
+          <img src="cid:logo" alt="K-DICE Logo" style="max-width: 140px; margin-bottom: 20px;">
+          <h1 style="color: white; margin: 0; font-size: 26px; font-weight: 300; letter-spacing: 1px;">Bienvenido, ${name}</h1>
         </div>
-
-        <div style="padding: 30px; background-color: #ffffff;">
-          <p style="font-size: 14px; color: #666; margin-bottom: 20px;">${currentDate}</p>
-          
-          <h2 style="color: #1e40af; margin-top: 0;">¡Estamos felices de tenerte aquí!</h2>
-          <p style="line-height: 1.6; color: #4b5563;">
-            Gracias por unirte a <strong>JMG STORE</strong>. Hemos creado este espacio para que encuentres los mejores productos con la seguridad y confianza que mereces.
+        <div style="padding: 40px; background-color: #ffffff;">
+          <p style="font-size: 12px; color: #a0aec0; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 25px;">${currentDate}</p>
+          <h2 style="color: #065f46; margin-top: 0; font-size: 22px; font-weight: 600;">Una nueva etapa comienza hoy.</h2>
+          <p style="line-height: 1.8; color: #4a5568; font-size: 16px;">
+            Es un placer darte la bienvenida a <strong>K-DICE</strong>. Nos esforzamos por ofrecerte una plataforma donde la calidad y la seguridad convergen para brindarte la mejor experiencia de compra y venta en nuestro marketplace.
           </p>
-
-          <div style="margin: 30px 0; padding: 20px; background-color: #f8fafc; border-radius: 8px;">
-            <p style="font-weight: bold; margin-bottom: 15px; color: #1e3a8a;">¿Qué puedes hacer ahora?</p>
-            <ul style="padding-left: 20px; color: #4b5563; line-height: 1.8;">
-              <li>Explorar las últimas tendencias.</li>
-              <li>Configurar tu perfil de usuario.</li>
-              <li>Añadir tus productos favoritos a la lista de deseos.</li>
+          <div style="margin: 35px 0; padding: 25px; border-left: 4px solid #10b981; background-color: #f0fdf4; border-radius: 0 8px 8px 0;">
+            <p style="font-weight: bold; margin-bottom: 15px; color: #064e3b; font-size: 15px;">Primeros pasos en su cuenta:</p>
+            <ul style="padding-left: 20px; color: #374151; line-height: 2; font-size: 14px;">
+              <li>Descubre productos seleccionados de alta gama.</li>
+              <li>Personaliza tu entorno y preferencias de seguridad.</li>
+              <li>Gestiona tus listas de deseos y seguimiento de pedidos.</li>
             </ul>
           </div>
-
-          <div style="text-align: center; margin-top: 35px;">
-            <a href="https://tu-sitio-web.com/products" 
-               style="background-color: #2563eb; color: white; padding: 14px 30px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
-               Empezar a Comprar
+          <div style="text-align: center; margin-top: 40px;">
+            <a href="https://www.k-dice.com" 
+               style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 35px; border-radius: 50px; text-decoration: none; font-weight: 600; font-size: 15px; display: inline-block;">
+               Explorar K-DICE
             </a>
           </div>
         </div>
-
-        <div style="background-color: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #9ca3af;">
-          <p style="margin: 5px 0;">Este es un correo automático, por favor no lo respondas.</p>
-          <p style="margin: 5px 0;">© 2025 JMG STORE Marketplace. Todos los derechos reservados.</p>
-          <div style="margin-top: 10px;">
-            <a href="#" style="color: #2563eb; text-decoration: none; margin: 0 10px;">Privacidad</a> | 
-            <a href="#" style="color: #2563eb; text-decoration: none; margin: 0 10px;">Soporte</a>
-          </div>
+        <div style="background-color: #f9fafb; padding: 30px; text-align: center; font-size: 12px; color: #718096; border-top: 1px solid #edf2f7;">
+          <p style="margin: 5px 0;">Has recibido este correo como parte de tu registro en K-DICE.</p>
+          <p style="margin: 5px 0; font-weight: bold;">© 2026 K-DICE Marketplace. Excelencia en cada detalle.</p>
         </div>
-
       </div>
     `,
-    attachments: [
-      {
-        filename: "logo-1.png",
-        path: logoPath,
-        cid: "logo",
-      },
-    ],
+    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
   };
 };
+
 /* ===================== CORREO NOTIFICACIÓN (NUEVO) ===================== */
 const notificationMail = ({ email, name, message, order }) => {
   const currentDate = new Date().toLocaleString("es-CO");
 
   return {
-    from: "pruebadesarrollo2184@gmail.com",
+    from: OFFICIAL_FROM,
     to: email,
     subject: "📦 Nueva notificación de pedido",
     html: `
       <div style="max-width:600px;margin:auto;font-family:Arial">
         <p style="color:#777">${currentDate}</p>
-
         <h3>Hola ${name}</h3>
         <p>${message}</p>
-
-        ${
-          order
-            ? `
+        ${order ? `
           <div style="background:#f5f5f5;padding:12px;border-radius:6px">
             <p><strong>Pedido:</strong> ${order._id}</p>
             <p><strong>Total:</strong> $${order.total}</p>
             <p><strong>Estado:</strong> ${order.status}</p>
-            <p><strong>Entrega:</strong> ${order.deliveryMethod}</p>
-          </div>
-        `
-            : ""
-        }
-
-        <p style="margin-top:20px">
-          Ingresa a tu panel de vendedor para más detalles.
-        </p>
+          </div>` : ""}
+        <p style="margin-top:20px">Ingresa a tu panel para más detalles.</p>
       </div>
     `,
   };
 };
 
+/* ===================== CORREO BIENVENIDA VENDEDOR ===================== */
+const welcomeSellerMail = (email, name) => {
+  return {
+    from: OFFICIAL_FROM,
+    to: email,
+    subject: "Confirmación de Registro: Su portal de vendedor en K-DICE está activo",
+    html: `
+      <div style="max-width: 600px; margin: auto; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; color: #1a202c; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+        <div style="background: linear-gradient(135deg, #059669 0%, #064e3b 100%); padding: 45px 20px; text-align: center;">
+          <img src="cid:logo" alt="K-DICE Business" style="max-width: 130px; margin-bottom: 20px;">
+          <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 300; letter-spacing: 0.5px;">Bienvenido al Ecosistema K-DICE</h1>
+        </div>
+        <div style="padding: 40px; background-color: #ffffff;">
+          <h2 style="color: #065f46; margin-top: 0; font-size: 20px; font-weight: 600;">Estimado/a ${name},</h2>
+          <p style="line-height: 1.8; color: #4a5568; font-size: 15px;">
+            Es un placer informarle que su cuenta de <strong>Socio Comercial</strong> ha sido activada con éxito.
+          </p>
+          <div style="margin: 30px 0; padding: 25px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #edf2f7;">
+            <p style="font-weight: bold; margin-bottom: 15px; color: #064e3b; font-size: 14px;">Módulo de Gestión Profesional:</p>
+            <ul style="font-size: 14px; color: #4a5568;">
+              <li>✔️ Catálogo de productos.</li>
+              <li>✔️ Logística en tiempo real.</li>
+              <li>✔️ Analítica de ventas.</li>
+            </ul>
+          </div>
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://vendedores.k-dice.com" 
+               style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+               Acceder al Panel de Control
+            </a>
+          </div>
+        </div>
+        <div style="background-color: #f1f5f9; padding: 30px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
+          <p>© 2026 K-DICE Marketplace </p>
+        </div>
+      </div>
+    `,
+    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+  };
+};
+
 module.exports = {
   transporter,
-  mailDetails,        // bienvenida
-  notificationMail,   // notificaciones
+  mailDetails,
+  notificationMail,
+  welcomeSellerMail
 };

@@ -2,6 +2,7 @@ const Suscripcion = require("../models/Suscripcion");
 
 const sellerActiveMiddleware = async (req, res, next) => {
   try {
+    // Solo aplica a sellers
     if (req.user.rol !== "seller") return next();
 
     const suscripcion = await Suscripcion.findOne({
@@ -10,58 +11,54 @@ const sellerActiveMiddleware = async (req, res, next) => {
 
     if (!suscripcion) {
       return res.status(403).json({
-        error: "No tienes una suscripción activa"
+        error: "No tienes una suscripción"
       });
     }
 
     const now = new Date();
 
     /* ===============================
-       🔴 BLOQUEOS DUROS
+       🔴 VENCIMIENTO (TRIAL O PAGO)
     =============================== */
-
-    if (suscripcion.estado === "pendiente") {
-      return res.status(403).json({
-        error: "Debes subir el comprobante de pago"
-      });
-    }
-
-    if (suscripcion.estado === "en_revision") {
-      return res.status(403).json({
-        error: "Tu pago está en revisión"
-      });
-    }
-
-    if (suscripcion.estado === "rechazada") {
-      return res.status(403).json({
-        error: "Tu comprobante fue rechazado"
-      });
-    }
-
     if (
-      suscripcion.estado === "vencida" ||
-      (suscripcion.estado === "activa" &&
-        suscripcion.fecha_vencimiento &&
-        now > suscripcion.fecha_vencimiento)
+      suscripcion.fecha_vencimiento &&
+      now > suscripcion.fecha_vencimiento
     ) {
       return res.status(403).json({
-        error: "Tu suscripción está vencida. Debes renovarla."
+        error: "Tu suscripción está vencida. Debes activarla para continuar."
       });
     }
 
     /* ===============================
-       🟢 SOLO AQUÍ PASA
+       🔴 BLOQUEOS ADMINISTRATIVOS
     =============================== */
-    if (suscripcion.estado !== "activa") {
+    if (["pendiente", "en_revision", "rechazada"].includes(suscripcion.estado)) {
       return res.status(403).json({
-        error: "Tu tienda no está activa"
+        error: "Tu suscripción no está habilitada"
       });
     }
 
-    next();
+    /* ===============================
+       🟢 PERMITIDOS
+       trial → 5 días gratis
+       activa → pago aprobado
+    =============================== */
+    if (["trial", "activa"].includes(suscripcion.estado)) {
+      return next();
+    }
+
+    /* ===============================
+       ❌ CUALQUIER OTRO CASO
+    =============================== */
+    return res.status(403).json({
+      error: "Acceso no permitido"
+    });
+
   } catch (error) {
     console.error("❌ sellerActiveMiddleware:", error);
-    res.status(500).json({ error: "Error validando suscripción" });
+    res.status(500).json({
+      error: "Error validando suscripción"
+    });
   }
 };
 

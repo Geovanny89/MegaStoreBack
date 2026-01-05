@@ -14,8 +14,8 @@ const suscripcionSchema = new mongoose.Schema({
 
   estado: {
     type: String,
-    enum: ["pendiente", "en_revision", "activa", "vencida", "rechazada"],
-    default: "pendiente"
+    enum: ["trial","pendiente", "en_revision", "activa", "vencida", "rechazada"],
+    default: "trial"
   },
 
   paymentProof: {

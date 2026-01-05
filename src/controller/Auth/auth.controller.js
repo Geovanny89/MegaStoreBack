@@ -4,7 +4,7 @@ const Planes = require('../../models/Planes');
 const { matchedData } = require('express-validator');
 const { encrypt, compare } = require('../../utils/handlePassword');
 const { tokenSign } = require('../../utils/handleJwt');
-const { transporter, mailDetails } = require('../../mailer/nodemailer');
+const { transporter, mailDetails, welcomeSellerMail } = require('../../mailer/nodemailer');
 const crypto = require("crypto");
 const cloudinary = require("../../utils/cloudinary");
 const slugify = require('slugify');
@@ -14,7 +14,6 @@ const registerUser = async (req, res) => {
   try {
     const data = matchedData(req);
     
-    // Verificar si el correo ya existe
     const existingUser = await User.findOne({ email: data.email });
     if (existingUser) {
       return res.status(400).json({ error: 'El correo electrónico ya está registrado' });
@@ -26,14 +25,19 @@ const registerUser = async (req, res) => {
       ...data,
       password: hashedPassword,
       rol: "user",
-      sellerStatus: "active" // Los clientes no pasan por revisión
+      sellerStatus: "active" 
     });
 
-    // Enviar correo de bienvenida
+    // 🔥 SOLUCIÓN: Quitamos el 'await' para que el correo se envíe en segundo plano
+    // No bloqueamos la respuesta al cliente
     const welcomeEmail = mailDetails(newUser.email, newUser.name);
-    await transporter.sendMail(welcomeEmail);
+    
+    transporter.sendMail(welcomeEmail).catch(err => {
+      console.error("Error enviando correo en segundo plano:", err);
+    });
 
-    res.status(201).json({ 
+    // El cliente recibe su respuesta de inmediato
+    return res.status(201).json({ 
       message: "Usuario registrado correctamente", 
       usuario: newUser 
     });
@@ -43,31 +47,21 @@ const registerUser = async (req, res) => {
     res.status(500).json({ message: "Error al registrar el usuario" });
   }
 };
-
 /**
  * REGISTRO PARA VENDEDORES (SELLERS)
  */
 const registerSeller = async (req, res) => {
   try {
     const data = matchedData(req);
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-    /* ===============================
-       1. VALIDACIONES DE NEGOCIO
-    ================================ */
-    if (!data.storeName) {
-      return res.status(400).json({ error: "El nombre de la tienda es obligatorio" });
+    /* ================= 1. VALIDACIONES INICIALES ================= */
+    if (!data.name || !data.email || !data.password || !data.storeName || !data.planId || !data.storeCategory) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
     }
 
-    if (!data.planId) {
-      return res.status(400).json({ error: "Debes seleccionar un plan" });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: "El logo de la tienda es obligatorio" });
-    }
-
-    if (!data.storeCategory) {
-      return res.status(400).json({ error: "Debes seleccionar una categoría para tu tienda" });
+    if (!req.files || !req.files["image"]) {
+      return res.status(400).json({ error: "La imagen de la tienda es obligatoria" });
     }
 
     const existingUser = await User.findOne({ email: data.email });
@@ -75,101 +69,106 @@ const registerSeller = async (req, res) => {
       return res.status(400).json({ error: "El correo ya está registrado" });
     }
 
-    /* ===============================
-       2. VALIDAR PLAN
-    ================================ */
-    const plan = await Planes.findOne({
-      _id: data.planId,
-      estado: "activo"
-    });
+    /* ================= 2. PROCESOS PESADOS EN PARALELO ================= */
+    // Cloudinary y Encriptación corren al tiempo para ahorrar segundos
+    const [storeLogoResult, hashedPassword, plan] = await Promise.all([
+      uploadToCloudinary(req.files["image"][0], "store_logos"),
+      encrypt(data.password),
+      Planes.findOne({ _id: data.planId, estado: "activo" })
+    ]);
 
     if (!plan) {
       return res.status(404).json({ error: "Plan inválido o inactivo" });
     }
 
-    /* ===============================
-       3. GENERAR SLUG ÚNICO
-    ================================ */
+    /* ================= 3. GENERAR SLUG ÚNICO ================= */
     let generatedSlug = slugify(data.storeName, { lower: true, strict: true });
-
-    const slugExists = await User.findOne({ slug: generatedSlug });
-    if (slugExists) {
-      generatedSlug = `${generatedSlug}-${crypto.randomBytes(2).toString("hex")}`;
+    let count = 1;
+    while (await User.findOne({ slug: generatedSlug })) {
+      generatedSlug = `${slugify(data.storeName, { lower: true, strict: true })}-${count++}`;
     }
 
-    /* ===============================
-       4. SUBIR LOGO A CLOUDINARY
-    ================================ */
-    const storeLogoUrl = await new Promise((resolve, reject) => {
-      const upload = cloudinary.uploader.upload_stream(
-        { folder: "store_logos" },
-        (err, result) => {
-          if (err) reject(err);
-          else resolve(result.secure_url);
-        }
-      );
-      upload.end(req.file.buffer);
-    });
-
-    /* ===============================
-       5. CREAR USUARIO VENDEDOR
-       🔑 AQUÍ ESTABA EL ERROR
-    ================================ */
-    const hashedPassword = await encrypt(data.password);
-
+    /* ================= 4. GUARDAR EN BASE DE DATOS (USUARIO) ================= */
     const newUser = new User({
       name: data.name,
       email: data.email,
       password: hashedPassword,
-      image: storeLogoUrl,
-      slug: generatedSlug,
+      phone: data.phone || null,
+      rol: "seller",
+      sellerStatus: "pending_identity",
       storeName: data.storeName,
       storeCategory: data.storeCategory,
-      rol: "seller",
-      sellerStatus: "pending_payment",
-
-      // 🔑 ASIGNAMOS EL PLAN AL USUARIO
+      slug: generatedSlug,
+      image: storeLogoResult.secure_url,
+      verification: {
+        isVerified: false,
+        registrationIp: ip,
+        registrationDevice: req.headers["user-agent"] || "Unknown Device"
+      },
       subscriptionPlan: plan._id
     });
 
     await newUser.save();
 
-    /* ===============================
-       6. CREAR SUSCRIPCIÓN (HISTORIAL)
-    ================================ */
-    const fechaInicio = new Date();
-    const fechaVencimiento = new Date();
-    fechaVencimiento.setMonth(
-      fechaVencimiento.getMonth() + plan.duracion_meses
-    );
+    /* ================= 5. CREAR SUSCRIPCIÓN TRIAL ================= */
+    const trialDurationDays = 5;
+    const expirationDate = new Date(Date.now() + trialDurationDays * 24 * 60 * 60 * 1000);
 
-    await Suscripciones.create({
+    const trial = await Suscripciones.create({
       id_usuario: newUser._id,
       plan_id: plan._id,
-      fecha_inicio: fechaInicio,
-      fecha_vencimiento: fechaVencimiento,
-      estado: "pendiente"
+      estado: "trial",
+      fecha_inicio: new Date(),
+      fecha_vencimiento: expirationDate
     });
 
-    /* ===============================
-       7. EMAIL + RESPUESTA
-    ================================ */
-    await transporter.sendMail(
-      mailDetails(newUser.email, newUser.name)
-    );
+    console.log("✅ Vendedor y Trial creados correctamente");
 
+    /* ================= 6. ENVÍO DE EMAIL (ASÍNCRONO) ================= */
+    // Se dispara aquí porque ya sabemos que el usuario se guardó bien.
+    // No usamos 'await' para que el usuario no espere la respuesta del servidor de correo.
+    transporter.sendMail(welcomeSellerMail(newUser.email, newUser.name))
+      .then(() => console.log(`📧 Email enviado a ${newUser.email}`))
+      .catch(err => console.error("❌ Error enviando email:", err));
+
+    /* ================= 7. RESPUESTA FINAL AL CLIENTE ================= */
     return res.status(201).json({
-      message: "Registro de vendedor exitoso. Pendiente de pago.",
-      usuario: newUser,
-      storeUrl: `/tienda/${generatedSlug}`
+      message: "Registro exitoso. Disfruta de 5 días de prueba. Al finalizar deberás subir el comprobante de pago.",
+      usuario: {
+        id: newUser._id,
+        email: newUser.email,
+        slug: newUser.slug,
+        sellerStatus: newUser.sellerStatus
+      },
+      trial: {
+        endsAt: expirationDate
+      },
+      nextStep: "/seller/verify-identity",
+      storeUrl: `/${newUser.slug}`
     });
 
   } catch (error) {
-    console.error("ERROR EN REGISTER_SELLER:", error);
+    console.error("❌ ERROR EN REGISTER_SELLER:", error);
     return res.status(500).json({
-      message: "Error al registrar el vendedor"
+      message: "Error al registrar el vendedor",
+      error: error.message
     });
   }
+};
+
+
+// Helper que ya tenías, se mantiene igual
+const uploadToCloudinary = (file, folder) => {
+  return new Promise((resolve, reject) => {
+    const upload = cloudinary.uploader.upload_stream(
+      { folder: folder },
+      (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      }
+    );
+    upload.end(file.buffer);
+  });
 };
 
 

@@ -18,26 +18,24 @@ const validatePayment = async (req, res) => {
 
     if (action === "approve") {
       /* ===============================
-         🟢 ACTIVAR Y RENOVAR
+         🟢 APROBAR PAGO → 30 DÍAS
       =============================== */
-      const now = new Date();
+      const inicio = new Date();
+      const vencimiento = new Date();
+      vencimiento.setDate(inicio.getDate() + 30); // ✅ 30 días exactos
 
       suscripcion.estado = "activa";
-      suscripcion.fecha_inicio = now;
-
-      // 👇 RENOVACIÓN MENSUAL (AJUSTA SI ES OTRO PLAN)
-      suscripcion.fecha_vencimiento = new Date(
-        new Date().setMonth(now.getMonth() + 1)
-      );
+      suscripcion.fecha_inicio = inicio;
+      suscripcion.fecha_vencimiento = vencimiento;
 
       seller.sellerStatus = "active";
     } 
     else if (action === "reject") {
       /* ===============================
-         🔴 RECHAZAR (NO TOCAR FECHAS)
+         🔴 RECHAZAR PAGO
       =============================== */
       suscripcion.estado = "rechazada";
-      seller.sellerStatus = "expired"; // sigue bloqueado
+      seller.sellerStatus = "expired";
     } 
     else {
       return res.status(400).json({ error: "Acción inválida" });
@@ -47,7 +45,7 @@ const validatePayment = async (req, res) => {
     await seller.save();
 
     /* ===============================
-       🔔 NOTIFICACIÓN
+       📧 NOTIFICACIÓN
     =============================== */
     await transporter.sendMail({
       to: seller.email,
@@ -55,14 +53,14 @@ const validatePayment = async (req, res) => {
         ? "Pago aprobado"
         : "Pago rechazado",
       text: action === "approve"
-        ? "Tu suscripción fue renovada y tu tienda ya está activa."
+        ? "Tu suscripción fue activada por 30 días."
         : "Tu comprobante fue rechazado. Por favor sube uno nuevo."
     });
 
     res.json({
       message:
         action === "approve"
-          ? "Pago aprobado y suscripción renovada"
+          ? "Pago aprobado. Suscripción activa por 30 días"
           : "Pago rechazado correctamente"
     });
 
@@ -86,6 +84,71 @@ const sellerPending = async (req, res) => {
     res.status(500).json({ error: "Error obteniendo pagos pendientes" });
   }
 };
+const getPendingIdentity = async (req, res) => {
+  try {
+    const sellers = await User.find({
+      rol: "seller",
+      sellerStatus: "pending_identity" // ✅ CAMPO CORRECTO
+    }).select("-password");
+
+    res.json(sellers);
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener vendedores" });
+  }
+};
 
 
-module.exports = { validatePayment,sellerPending };
+// 2. Aprobar o Rechazar identidad (CON LÓGICA DE BLOQUEO)
+// controller/Admin/payment.controller.js
+const approveIdentity = async (req, res) => {
+  const { userId } = req.params;
+  const { action, reason } = req.body;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    if (action === "approve") {
+      user.verification.isVerified = true;
+      user.verification.verifiedAt = new Date();
+      user.verification.verificationReason = null;
+      user.sellerStatus = "pending_payment";
+    }
+
+    if (action === "reject") {
+      user.verification.isVerified = false;
+      user.verification.verificationReason = reason || "Identidad rechazada";
+      user.sellerStatus = "rejected";
+    }
+
+    // Guardar cambios
+    await user.save();
+
+    // Devolver usuario actualizado para frontend
+    res.json({
+      message: action === "approve" ? "Identidad aprobada" : "Identidad rechazada",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        sellerStatus: user.sellerStatus,
+        verification: user.verification
+      }
+    });
+  } catch (error) {
+    console.error("Error approveIdentity:", error);
+    res.status(500).json({ message: "Error al procesar" });
+  }
+};
+
+
+
+
+module.exports = { 
+  validatePayment,
+  sellerPending,
+  getPendingIdentity,
+  approveIdentity 
+};

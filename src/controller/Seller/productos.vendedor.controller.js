@@ -36,13 +36,15 @@ const createSellerProduct = async (req, res) => {
 
     // Validar suscripción
     const suscripcion = await Suscripciones.findOne({
-      id_usuario: sellerId,
-      estado: "activa"
-    }).populate("plan_id");
+  id_usuario: sellerId,
+  estado: { $in: ["activa", "trial"] }
+}).populate("plan_id");
 
-    if (!suscripcion) {
-      return res.status(403).json({ message: "Necesitas una suscripción activa" });
-    }
+if (!suscripcion) {
+  return res.status(403).json({
+    message: "Necesitas una suscripción activa o un período de prueba"
+  });
+}
 
     const limite =
       suscripcion.plan_id.nombre === "emprendedor"

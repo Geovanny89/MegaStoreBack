@@ -26,6 +26,10 @@ const messages = require('./Messages/messages')
 const store = require('./Store/store')
 const sellerPago = require('./Admin/sellerPago') 
 const validarPago = require('./Admin/validate-payment')
+const verification = require('./Seller/verificacion')
+const reportar = require('./User/Report')
+const reportes =require('./Admin/reportadmin') // ver reportes vendedores solo admin
+const valiateIdentidad =require('./Seller/submitIdentity')
 
 
 const router = express();
@@ -57,6 +61,10 @@ router.use(messages)
 router.use(store)
 router.use(sellerPago)
 router.use(validarPago)
+router.use(verification)
+router.use(reportar)
+router.use(reportes)
+router.use(valiateIdentidad)
 
 
 

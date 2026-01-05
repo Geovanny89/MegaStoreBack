@@ -7,52 +7,91 @@ const crearSuscripcion = async (req, res) => {
   try {
     const { usuarioId, planNombre } = req.body;
 
-    // 0. Verificar que el usuario exista y sea seller
+    // 0️⃣ Validar usuario
     const usuario = await Usuarios.findById(usuarioId);
     if (!usuario) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
     if (usuario.rol !== 'seller') {
-      return res.status(403).json({ message: 'Solo los vendedores pueden tener suscripción' });
+      return res.status(403).json({
+        message: 'Solo los vendedores pueden tener suscripción'
+      });
     }
 
-    // 1. Buscar el plan por nombre
-    const plan = await Planes.findOne({ nombre: planNombre, estado: 'activo' });
+    // 1️⃣ Buscar plan
+    const plan = await Planes.findOne({
+      nombre: planNombre,
+      estado: 'activo'
+    });
+
     if (!plan) {
       return res.status(404).json({ message: 'Plan no encontrado' });
     }
 
-    // 🔥 2. INVALIDAR SUSCRIPCIONES ANTERIORES (PARTE FALTANTE)
+    // 🔥 2️⃣ Invalidar CUALQUIER suscripción previa
     await Suscripciones.updateMany(
-      { id_usuario: usuarioId, estado: "activa" },
-      { estado: "vencida" }
+      { id_usuario: usuarioId, estado: { $in: ['activa', 'pendiente'] } },
+      { estado: 'vencida' }
     );
 
-    // 3. Calcular fecha de vencimiento
+    // 3️⃣ Fechas del TRIAL (5 días)
     const fechaInicio = new Date();
     const fechaVencimiento = new Date();
-    fechaVencimiento.setMonth(fechaVencimiento.getMonth() + plan.duracion_meses);
+    fechaVencimiento.setDate(fechaInicio.getDate() + 5);
 
-    // 4. Crear nueva suscripción activa
+    // 4️⃣ Crear suscripción GRATIS
     const suscripcion = await Suscripciones.create({
       id_usuario: usuarioId,
       plan_id: plan._id,
       fecha_inicio: fechaInicio,
       fecha_vencimiento: fechaVencimiento,
-      estado: 'activa'
+      estado: 'trial' // 👈 activa solo durante el trial
     });
 
     res.status(201).json({
-      message: 'Suscripción creada correctamente',
+      message: 'Suscripción creada con 5 días gratis',
       suscripcion
     });
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error al crear la suscripción' });
+    res.status(500).json({
+      message: 'Error al crear la suscripción'
+    });
   }
 };
 
+
+const activarSuscripcionPago = async (req, res) => {
+  const { suscripcionId } = req.body;
+
+  const suscripcion = await Suscripciones
+    .findById(suscripcionId)
+    .populate('plan_id');
+
+  if (!suscripcion) {
+    return res.status(404).json({ message: 'Suscripción no encontrada' });
+  }
+
+  const inicio = new Date();
+  const vencimiento = new Date();
+  vencimiento.setMonth(
+    vencimiento.getMonth() + suscripcion.plan_id.duracion_meses
+  );
+
+  suscripcion.estado = 'activa';
+  suscripcion.fecha_inicio = inicio;
+  suscripcion.fecha_vencimiento = vencimiento;
+
+  await suscripcion.save();
+
+  res.json({
+    message: 'Suscripción activada por 30 días'
+  });
+};
+
+
 module.exports = {
-  crearSuscripcion
+  crearSuscripcion,
+  activarSuscripcionPago,
 };

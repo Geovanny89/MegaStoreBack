@@ -1,18 +1,33 @@
 const Productos = require("../../models/Productos")
+const Suscripciones = require("../../models/Suscripcion"); // Importante importar el modelo
 
 const productoUser = async (req, res) => {
     try {
-        const allProducts = await Productos.find()
-            .populate("tipo", "name")
-            .populate("vendedor", "storeName");
+        const hoy = new Date();
+
+        // 1. Buscamos todas las suscripciones que estén vigentes (activa o trial)
+        const suscripcionesVigentes = await Suscripciones.find({
+            estado: { $in: ["activa", "trial"] },
+            fecha_vencimiento: { $gte: hoy }
+        }).select("id_usuario");
+
+        // 2. Extraemos solo los IDs de los vendedores con suscripción válida
+        const idsVendedoresActivos = suscripcionesVigentes.map(s => s.id_usuario);
+
+        // 3. Buscamos los productos, pero filtramos por los vendedores activos
+        const allProducts = await Productos.find({
+            vendedor: { $in: idsVendedoresActivos } // Solo trae productos de estos vendedores
+        })
+        .populate("tipo", "name")
+        .populate("vendedor", "storeName image");
 
         if (!allProducts || allProducts.length === 0) {
-            return res.status(404).send("NO existen productos para mostrar");
+            return res.status(200).json([]); // Es mejor devolver [] que un 404 para que el front no explote
         }
 
-        res.status(200).send(allProducts);
+        res.status(200).json(allProducts);
     } catch (error) {
-        console.log(error);
+        console.error("Error en productoUser:", error);
         res.status(500).json({ message: error.message });
     }
 };

@@ -95,7 +95,23 @@ const validatorRegisterSeller = [
         .exists()
         .notEmpty()
         .withMessage("La categoría de la tienda es obligatoria")
-        .isIn(["Tecnología", "Moda", "Ferretería", "Supermercado", "Hogar", "Belleza", "Deportes", "Otros"])
+        .isIn([
+            "Tecnología y Electrónica",
+            "Moda y Accesorios",
+            "Hogar y Muebles",
+            "Salud y Belleza",
+            "Deportes y Fitness",
+            "Supermercado y Alimentos",
+            "Restaurantes y Gastronomía",
+            "Juguetes y Bebés",
+            "Mascotas",
+            "Ferretería y Construcción",
+            "Automotriz",
+            "Papelería y Oficina",
+            "Arte y Artesanías",
+            "Servicios Profesionales",
+            "Otros"
+        ])
         .withMessage("Categoría no válida"),
 
     // Dirección de la tienda / despacho

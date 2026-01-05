@@ -69,13 +69,12 @@ const uploadPaymentProof = async (req, res) => {
     res.status(500).json({ error: "Error al subir comprobante" });
   }
 };
-
 const getSellerMe = async (req, res) => {
   try {
     const sellerId = req.user.id;
 
     const seller = await User.findById(sellerId).select(
-      "name storeName slug sellerStatus rol"
+      "name storeName slug sellerStatus rol verification"
     );
 
     if (!seller) {
@@ -86,56 +85,116 @@ const getSellerMe = async (req, res) => {
       return res.status(403).json({ message: "Acceso no autorizado" });
     }
 
-    const suscripcion = await Suscripcion.findOne({ id_usuario: sellerId });
+    const suscripcion = await Suscripcion.findOne({
+      id_usuario: sellerId
+    }).sort({ createdAt: -1 });
+
     const now = new Date();
 
-    /* =========================================
-       1️⃣ ESTADO BASE (SEGÚN PAGO)
-    ========================================= */
-   let sellerStatus = seller.sellerStatus;
+    /* ================= IDENTITY FLAGS ================= */
 
-if (!suscripcion || suscripcion.estado === "pendiente") {
-  sellerStatus = "pending_payment";
-}
+    const identityVerified = seller.verification?.isVerified === true;
 
-if (suscripcion?.estado === "en_revision") {
-  sellerStatus = "pending_review";
-}
+    const identityRejected =
+      seller.verification?.isVerified === false &&
+      !!seller.verification?.verificationReason;
 
-if (suscripcion?.estado === "rechazada") {
-  sellerStatus = "rejected";
-}
+    const identityPending =
+      seller.verification?.isVerified === false &&
+      !seller.verification?.verificationReason;
 
-/* 🔴 ESTE ERA EL BLOQUE QUE FALTABA */
-if (suscripcion?.estado === "vencida") {
-  sellerStatus = "expired";
-}
+    /* ================= SUBSCRIPTION ================= */
 
-/* =========================================
-   SOLO SI ESTÁ ACTIVA, VALIDAR FECHA
-========================================= */
-if (
-  suscripcion?.estado === "activa" &&
-  suscripcion.fecha_vencimiento &&
-  now > suscripcion.fecha_vencimiento
-) {
-  suscripcion.estado = "vencida";
-  sellerStatus = "expired";
-  await suscripcion.save();
-}
+    let subscriptionStatus = "none";
+    let isTrial = false;
 
+    if (suscripcion) {
+      if (suscripcion.estado === "trial") {
+        if (suscripcion.fecha_vencimiento && now <= suscripcion.fecha_vencimiento) {
+          subscriptionStatus = "trial";
+          isTrial = true;
+        } else {
+          suscripcion.estado = "pendiente";
+          await suscripcion.save();
+          subscriptionStatus = "pending_payment";
+        }
+      }
 
-    /* =========================================
-       3️⃣ SINCRONIZAR SELLER
-    ========================================= */
-    if (seller.sellerStatus !== sellerStatus) {
-      seller.sellerStatus = sellerStatus;
+      else if (suscripcion.estado === "activa") {
+        if (suscripcion.fecha_vencimiento && now <= suscripcion.fecha_vencimiento) {
+          subscriptionStatus = "active";
+        } else {
+          suscripcion.estado = "vencida";
+          await suscripcion.save();
+          subscriptionStatus = "expired";
+        }
+      }
+
+      else {
+        subscriptionStatus = suscripcion.estado;
+      }
+    }
+
+    /* ================= SELLER STATUS (DB) ================= */
+
+    let dbSellerStatus = seller.sellerStatus;
+
+    if (identityRejected) {
+      dbSellerStatus = "rejected_identity";
+    } else if (identityPending) {
+      dbSellerStatus = "pending_identity";
+    } else {
+      if (subscriptionStatus === "pending_payment") {
+        dbSellerStatus = "pending_payment";
+      }
+      if (subscriptionStatus === "en_revision") {
+        dbSellerStatus = "pending_review";
+      }
+      if (subscriptionStatus === "expired") {
+        dbSellerStatus = "expired";
+      }
+      if (subscriptionStatus === "active") {
+        dbSellerStatus = "active";
+      }
+    }
+
+    if (seller.sellerStatus !== dbSellerStatus) {
+      seller.sellerStatus = dbSellerStatus;
       await seller.save();
     }
 
+    /* ================= SELLER STATUS (UI) ================= */
+
+    let uiSellerStatus = dbSellerStatus;
+
+    // 🔥 TRIAL solo para UI
+    if (subscriptionStatus === "trial") {
+      uiSellerStatus = "trial";
+    }
+
+    /* ================= RESPONSE ================= */
+
     return res.json({
-      sellerStatus,
-      paymentStatus: suscripcion?.estado || null,
+      sellerStatus: uiSellerStatus, // 👈 frontend ve trial
+
+      permissions: {
+        canAccessDashboard: true,
+        canPublishProducts: identityVerified,
+        canSell:
+          identityVerified &&
+          (subscriptionStatus === "active" || subscriptionStatus === "trial"),
+        needsIdentityVerification: !identityVerified,
+        needsPayment: subscriptionStatus === "pending_payment",
+        identityRejected,
+        identityPending
+      },
+
+      subscription: {
+        status: subscriptionStatus,
+        isTrial,
+        expiresAt: suscripcion?.fecha_vencimiento || null
+      },
+
       seller,
       suscripcion
     });
@@ -147,6 +206,15 @@ if (
     });
   }
 };
+
+
+
+
+
+
+
+
+
 
 
 

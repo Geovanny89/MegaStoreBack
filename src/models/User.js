@@ -2,135 +2,177 @@ const mongoose = require("mongoose");
 const addressSchema = require("./Address");
 const slugify = require("slugify");
 
-const userSchema = new mongoose.Schema({
+// 1. Mantenemos tus categorías exactamente igual
+const STORE_CATEGORIES = [
+  "Tecnología y Electrónica",
+  "Moda y Accesorios",
+  "Hogar y Muebles",
+  "Salud y Belleza",
+  "Deportes y Fitness",
+  "Supermercado y Alimentos",
+  "Restaurantes y Gastronomía",
+  "Juguetes y Bebés",
+  "Mascotas",
+  "Ferretería y Construcción",
+  "Automotriz",
+  "Papelería y Oficina",
+  "Arte y Artesanías",
+  "Servicios Profesionales",
+  "Otros"
+];
 
-  /* ================= DATOS BÁSICOS ================= */
-  name: { type: String, required: true },
-  lastName: String,
-  identity: String,
-  email: String,
-  password: String,
-  phone: String,
-
-  resetPasswordToken: { type: String, default: null },
-  resetPasswordExpires: { type: Date, default: null },
-
-  addresses: [addressSchema],
-
-  rol: {
-    type: String,
-    enum: ["user", "seller", "admin"],
-    required: true
-  },
-
-  /* ================= TIENDA ================= */
-  storeName: {
-    type: String,
-    default: null
-  },
-  storeCategory: {
-  type: String,
-  enum: [
-    "Tecnología", 
-    "Moda", 
-    "Ferretería", 
-    "Supermercado", 
-    "Hogar", 
-    "Belleza", 
-    "Deportes",
-    "Otros"
-  ],
-  default: null,
-  index: true // Indexar para búsquedas rápidas
-},
-
-  slug: {
-    type: String,
-    unique: true,
-    sparse: true,
-    lowercase: true,
-    trim: true
-  },
-
-  image: {
-    type: String,
-    default: null
-  },
-
-  /* ================= ESTADO SELLER ================= */
-  sellerStatus: {
-    type: String,
-    enum: [
-      "pending_payment",
-      "pending_review",
-      "active",
-      "rejected",
-      "expired"
-    ],
-    default: function () {
-      return this.rol === "seller" ? "pending_payment" : "active";
-    },
-    index: true
-  },
-
-  paymentProof: {
-    type: String,
-    default: null
-  },
-
-  paymentDate: {
-    type: Date,
-    default: null
-  },
-
-  /* ================= MÉTODOS DE PAGO ================= */
-  paymentMethods: [
+const userSchema = new mongoose.Schema(
   {
-    type: {
+    /* ================= DATOS BÁSICOS ================= */
+    name: { type: String, required: true },
+    lastName: { type: String, default: null },
+    identity: { type: String, default: null },
+
+    email: {
       type: String,
-      enum: ["phone", "email", "document", "random"],
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true
+    },
+
+    password: { type: String, required: true },
+    phone: { type: String, default: null },
+
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null },
+
+    addresses: [addressSchema],
+
+    rol: {
+      type: String,
+      enum: ["user", "seller", "admin"],
       required: true
     },
-    value: {
+
+    /* ================= TIENDA ================= */
+    storeName: { type: String, default: null },
+
+    storeCategory: {
       type: String,
-      required: true
+      enum: STORE_CATEGORIES, 
+      default: null,
+      index: true
     },
-    provider: {
+
+    slug: {
       type: String,
-      enum: ["nequi", "daviplata", "bancolombia", "bbva","llaves", "otro"],
-      required: true
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      trim: true
     },
-    qr: {
+
+    image: { type: String, default: null },
+
+    /* ================= VERIFICACIÓN DE IDENTIDAD ================= */
+    verification: {
+      isVerified: { type: Boolean, default: false },
+
+      idDocumentFront: {
+        url: { type: String, default: null },
+        public_id: { type: String, default: null }
+      },
+
+      selfieWithPaper: {
+        url: { type: String, default: null },
+        public_id: { type: String, default: null }
+      },
+
+      verifiedAt: { type: Date, default: null },
+      verificationReason: { type: String, default: null },
+
+      registrationIp: { type: String, default: null },
+      registrationDevice: { type: String, default: null },
+
+      trustScore: { type: Number, default: 50 }
+    },
+
+    /* ================= ESTADO SELLER (ÚNICO) ================= */
+    sellerStatus: {
       type: String,
-      default: null
+      enum: [
+        "pending_identity",
+        "rejected_identity",
+        "pending_payment",
+        "pending_review",
+        "active",
+        "rejected",
+        "suspended",
+        "expired"
+      ],
+      default: function () {
+        return this.rol === "seller" ? "pending_identity" : "active";
+      },
+      index: true
     },
-    active: {
-      type: Boolean,
-      default: true
-    }
-  }
-],
+
+    /* ================= PAGO ================= */
+    paymentProof: { type: String, default: null },
+    paymentDate: { type: Date, default: null },
+
+    /* ================= MÉTODOS DE PAGO ================= */
+    paymentMethods: [
+      {
+        type: {
+          type: String,
+          enum: ["phone", "email", "document", "random"],
+          required: true
+        },
+        value: { type: String, required: true },
+        provider: {
+          type: String,
+          enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro"],
+          required: true
+        },
+        qr: { type: String, default: null },
+        active: { type: Boolean, default: true }
+      }
+    ],
+
     /* ================= PLAN DE SUSCRIPCIÓN ================= */
-  subscriptionPlan: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Planes",
-    default: null,
-    index: true
+    subscriptionPlan: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Planes",
+      default: null,
+      index: true
+    },
+
+    /* ================= RATING Y REPORTES ================= */
+    sellerRating: {
+      average: { type: Number, default: 0 },
+      count: { type: Number, default: 0 }
+    },
+
+    reportsCount: { type: Number, default: 0 }
   },
+  { timestamps: true }
+);
 
-
-  /* ================= RATING ================= */
-  sellerRating: {
-    average: { type: Number, default: 0 },
-    count: { type: Number, default: 0 }
+/* ================= MIDDLEWARE PRE-SAVE ================= */
+userSchema.pre("save", async function (next) {
+  // 1. Limpieza de datos si el rol no es seller
+  if (this.rol !== "seller") {
+    this.storeName = null;
+    this.storeCategory = null;
+    this.slug = undefined;
+    return next();
   }
 
-}, { timestamps: true });
+  // 2. Validación obligatoria para vendedores
+  if (this.rol === "seller") {
+    if (!this.storeName) return next(new Error("El nombre de la tienda es obligatorio para vendedores."));
+    if (!this.storeCategory) return next(new Error("La categoría de la tienda es obligatoria."));
+  }
 
-/* ===================== GENERAR SLUG AUTOMÁTICO ===================== */
-userSchema.pre("save", async function (next) {
-  if (this.rol === "seller" && this.storeName && !this.slug) {
-    let baseSlug = slugify(this.storeName, {
+  // 3. Generación de Slug automático para la Tienda (SEO)
+  if (this.storeName && (this.isModified("storeName") || !this.slug)) {
+    const baseSlug = slugify(this.storeName, {
       lower: true,
       strict: true
     });
@@ -138,13 +180,10 @@ userSchema.pre("save", async function (next) {
     let slug = baseSlug;
     let count = 1;
 
-    while (await mongoose.models.User.findOne({ slug })) {
+    // Verificar unicidad del slug para que no choquen tiendas con nombres iguales
+    while (await mongoose.models.User.findOne({ slug, _id: { $ne: this._id } })) {
       slug = `${baseSlug}-${count++}`;
     }
-    if (this.rol !== "seller") {
-    this.slug = undefined; 
-  }
-
     this.slug = slug;
   }
 

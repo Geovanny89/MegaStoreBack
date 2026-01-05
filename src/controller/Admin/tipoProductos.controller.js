@@ -55,30 +55,59 @@ const tipeProductName = async(req,res)=>{
  * @returns {Promise<void>} Promesa que resuelve con la respuesta al cliente.
  */
 
-const createTipeProduct = async(req,res )=>{
+/**
+ * Crea un tipo de producto con soporte para SEO (Slug y Metadatos)
+ */
+/**
+ * Crea un tipo de producto (Subcategoría) 
+ * Genera automáticamente el SEO (slug) a partir del nombre ingresado por el Admin.
+ */
+const createTipeProduct = async (req, res) => {
     try {
-        const {name} = req.body;
-        const existingTipe = await TipoProductos.findOne({ name });
+        const { name, categoriaPadre, usaTalla } = req.body;
 
+        // 1. Validaciones de datos obligatorios
+        if (!name || !categoriaPadre) {
+            return res.status(400).send("Faltan datos: El nombre y el rubro de la tienda son obligatorios.");
+        }
+
+        // 2. Verificar si el nombre ya existe para evitar duplicados
+        const existingTipe = await TipoProductos.findOne({ name });
         if (existingTipe) {
-            res.status(400).send("El tipo ya existe");
-            return;
+            return res.status(400).send("Este tipo de producto ya existe.");
         }
-        if(!name){
-            res.status(404).send("Por favor diligencia el formulario")
-            return
-        }
+
+        // 3. GENERACIÓN AUTOMÁTICA DEL SLUG (SEO)
+        // Esto convierte "Moda y Accesorios" en "moda-y-accesorios" automáticamente
+        const generatedSlug = name
+            .toLowerCase()
+            .normalize("NFD")               // Separa tildes de las letras
+            .replace(/[\u0300-\u036f]/g, "") // Elimina las tildes
+            .replace(/[^a-z0-9\s-]/g, "")    // Elimina caracteres especiales (@, #, $, etc)
+            .trim()
+            .replace(/\s+/g, "-")           // Cambia espacios por guiones
+            .replace(/-+/g, "-");           // Evita guiones dobles
+
+        // 4. Crear el registro en la base de datos
+        const newTipe = new TipoProductos({
+            name,
+            categoriaPadre,
+            usaTalla: usaTalla || false,
+            slug: generatedSlug, // Se guarda automáticamente para el SEO del Marketplace
+            metaTitle: `${name} | Las mejores ofertas en nuestro Marketplace`,
+            description: `Encuentra una amplia variedad de ${name} de las mejores tiendas de ${categoriaPadre}.`
+        });
+
+        await newTipe.save();
         
-        const newTipe = await TipoProductos(req.body);
-        await newTipe.save()
-        res.status(200).send(newTipe)
+        // Enviamos la respuesta con el objeto creado
+        res.status(201).json(newTipe);
 
     } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: error.message })
+        console.error("Error al crear tipo de producto:", error);
+        res.status(500).json({ message: error.message });
     }
 }
-
 /**
  * Actualizar tipo de producto.
  *
