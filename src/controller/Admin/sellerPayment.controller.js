@@ -72,9 +72,9 @@ const uploadPaymentProof = async (req, res) => {
 const getSellerMe = async (req, res) => {
   try {
     const sellerId = req.user.id;
-
+    console.log("vendedor",sellerId)
     const seller = await User.findById(sellerId).select(
-      "name storeName slug sellerStatus rol verification"
+      "name storeName slug sellerStatus rol verification paymentMethods"
     );
 
     if (!seller) {
@@ -158,10 +158,13 @@ const getSellerMe = async (req, res) => {
       }
     }
 
-    if (seller.sellerStatus !== dbSellerStatus) {
-      seller.sellerStatus = dbSellerStatus;
-      await seller.save();
-    }
+  if (seller.sellerStatus !== dbSellerStatus) {
+  await User.updateOne(
+    { _id: sellerId },
+    { sellerStatus: dbSellerStatus }
+  );
+}
+
 
     /* ================= SELLER STATUS (UI) ================= */
 

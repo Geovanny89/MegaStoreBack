@@ -2,6 +2,8 @@ const Productos = require("../../models/Productos");
 const TipoProductos = require("../../models/TipoProductos");
 const Suscripciones = require("../../models/Suscripcion");
 const cloudinary = require("../../utils/cloudinary");
+const XLSX = require("xlsx");
+const AdmZip = require("adm-zip");
 
 /**
  * Obtener productos del vendedor autenticado
@@ -295,9 +297,178 @@ const deleteSellerProduct = async (req, res) => {
   }
 };
 
+
+const importProductsFromExcel = async (req, res) => {
+  try {
+    const sellerId = req.user.id;
+
+    /* ================= VALIDAR ARCHIVOS ================= */
+    const excelFile = req.files?.excel?.[0];
+    const zipFile = req.files?.images?.[0];
+
+    if (!excelFile || !zipFile) {
+      return res.status(400).json({
+        message: "Debes subir un archivo Excel y un ZIP con imágenes"
+      });
+    }
+
+    /* ================= VALIDAR SUSCRIPCIÓN ================= */
+    const suscripcion = await Suscripciones.findOne({
+      id_usuario: sellerId,
+      estado: { $in: ["activa", "trial"] }
+    }).populate("plan_id");
+
+    if (!suscripcion) {
+      return res.status(403).json({
+        message: "Necesitas una suscripción activa o trial"
+      });
+    }
+
+    const limite =
+      suscripcion.plan_id.nombre === "emprendedor"
+        ? 20
+        : suscripcion.plan_id.nombre === "premium"
+        ? 80
+        : null;
+
+    const cantidadActual = await Productos.countDocuments({ vendedor: sellerId });
+
+    /* ================= LEER EXCEL ================= */
+    const workbook = XLSX.read(excelFile.buffer);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+    if (!rows.length) {
+      return res.status(400).json({ message: "El Excel está vacío" });
+    }
+
+    if (limite !== null && cantidadActual + rows.length > limite) {
+      return res.status(403).json({
+        message: `Tu plan permite ${limite} productos. Intentas subir ${rows.length}`
+      });
+    }
+
+    /* ================= LEER ZIP ================= */
+    const zip = new AdmZip(zipFile.buffer);
+    const imageMap = {};
+    zip.getEntries().forEach(entry => {
+      if (!entry.isDirectory) {
+        imageMap[entry.entryName] = entry.getData();
+      }
+    });
+
+    /* ================= OPTIMIZACIÓN 1: CACHÉ DE CATEGORÍAS ================= */
+    // En lugar de buscar en la DB por cada producto, traemos todas las categorías una sola vez
+    const todasLasCategorias = await TipoProductos.find({});
+    const categoriaCache = {};
+    todasLasCategorias.forEach(cat => {
+      categoriaCache[cat.name.toLowerCase().trim()] = cat;
+    });
+
+    /* ================= OPTIMIZACIÓN 2: PROCESAMIENTO EN PARALELO ================= */
+    // Definimos una función para procesar un solo producto
+    const procesarProducto = async (row) => {
+      try {
+        const tipoNombre = String(row.tipo || row.tipoId || "").trim().toLowerCase();
+        if (!tipoNombre) throw new Error(`Falta la categoría en el producto: ${row.name}`);
+
+        const tipo = categoriaCache[tipoNombre];
+        if (!tipo) throw new Error(`Categoría "${tipoNombre}" no existe`);
+
+        // Validar duplicado (esto sigue siendo necesario pero es rápido)
+        const existe = await Productos.findOne({ name: row.name, vendedor: sellerId });
+        if (existe) return null;
+
+        const sizesArray = row.sise ? row.sise.split(",").map(s => s.trim()).filter(Boolean) : [];
+        const colorsArray = row.color ? row.color.split(",").map(c => c.trim()).filter(Boolean) : [];
+
+        if (!row.images) throw new Error(`El producto "${row.name}" no tiene imágenes`);
+        const imageNames = row.images.split(",").map(i => i.trim());
+
+        /* OPTIMIZACIÓN 3: SUBIDA DE IMÁGENES EN PARALELO */
+        const uploadPromises = imageNames.map(async (imageName) => {
+          const buffer = imageMap[imageName];
+          if (!buffer) throw new Error(`Imagen no encontrada: ${imageName}`);
+
+          return new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(
+              { 
+                folder: "productos_tienda",
+                // Optimización de Cloudinary: redimensionar y comprimir al subir
+                transformation: [
+                  { width: 1000, height: 1000, crop: "limit" },
+                  { quality: "auto", fetch_format: "auto" }
+                ]
+              },
+              (err, result) => {
+                if (err) return reject(err);
+                resolve({ url: result.secure_url, public_id: result.public_id });
+              }
+            );
+            stream.end(buffer);
+          });
+        });
+
+        const uploadedImages = await Promise.all(uploadPromises);
+
+        return new Productos({
+          name: row.name,
+          price: row.price,
+          brand: row.brand,
+          stock: row.stock,
+          description: row.description,
+          sise: sizesArray,
+          color: colorsArray,
+          image: uploadedImages,
+          tipo: tipo._id,
+          vendedor: sellerId
+        });
+      } catch (error) {
+        console.error(`Error procesando producto ${row.name}:`, error.message);
+        return { error: error.message, productName: row.name };
+      }
+    };
+
+    // Ejecutamos el procesamiento de todos los productos en paralelo
+    // Usamos un límite de concurrencia si son muchos (ej. 5 a la vez) para no saturar Cloudinary/DB
+    const batchSize = 5;
+    let productosFinales = [];
+    let errores = [];
+
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      const resultados = await Promise.all(batch.map(row => procesarProducto(row)));
+      
+      resultados.forEach(res => {
+        if (res && !res.error) productosFinales.push(res);
+        else if (res && res.error) errores.push(res);
+      });
+    }
+
+    /* ================= OPTIMIZACIÓN 4: INSERCIÓN MASIVA (BULK INSERT) ================= */
+    if (productosFinales.length > 0) {
+      await Productos.insertMany(productosFinales);
+    }
+
+    res.json({
+      message: "Importación completada",
+      creados: productosFinales.length,
+      errores: errores.length > 0 ? errores : undefined
+    });
+
+  } catch (error) {
+    console.error("Error general de importación:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+
 module.exports = {
   getMyProducts,
   createSellerProduct,
   updateSellerProduct,
   deleteSellerProduct,
+  importProductsFromExcel
 };

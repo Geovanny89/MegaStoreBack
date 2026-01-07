@@ -5,29 +5,32 @@ const Producto = require("../../models/Productos");
 const AgregarFavorito = async (req, res) => {
   try {
     const userId = req.user.id;
-    const productId = req.params.productId;
+    const { productId } = req.params;
 
-    // Validar que el producto exista
     const product = await Producto.findById(productId);
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
-    // Crear favorito (si ya existe, saltará el índice único)
-    await Favorite.create({ user: userId, product: productId });
-
-    res.status(201).json({
-      message: "Producto agregado a favoritos"
+    const existe = await Favorite.findOne({
+      user: userId,
+      product: productId
     });
 
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ message: "El producto ya está en favoritos" });
+    if (existe) {
+      return res.status(200).json({ message: "Ya estaba en favoritos" });
     }
+
+    await Favorite.create({ user: userId, product: productId });
+
+    res.status(201).json({ message: "Producto agregado a favoritos" });
+
+  } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error agregando favorito" });
   }
 };
+
 
 
 // ➤ QUITAR FAVORITO

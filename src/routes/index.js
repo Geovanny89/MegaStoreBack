@@ -6,7 +6,7 @@ const UserProducts = require('./User/Products')
 const register = require('./Auth/Auth')
 const users = require('./User/Users')
 const orderUser = require('./User/Order')
-const banner = require('./Admin/Banner')
+// const banner = require('./Admin/Banner')
 const categories = require('./User/TipeProducts')
 const carrito = require('./User/Carrito')
 const favorite= require('./User/favoritos')
@@ -30,6 +30,9 @@ const verification = require('./Seller/verificacion')
 const reportar = require('./User/Report')
 const reportes =require('./Admin/reportadmin') // ver reportes vendedores solo admin
 const valiateIdentidad =require('./Seller/submitIdentity')
+const banners = require('./Seller/banners')
+const bannerSlug = require('./Seller/bannerslug')
+const descuentos = require('./Seller/descuentos')
 
 
 const router = express();
@@ -41,7 +44,7 @@ router.use(UserProducts)
 router.use(register)
 router.use(users)
 router.use(orderUser)
-router.use(banner)
+// router.use(banner)
 router.use(categories)
 router.use(carrito)
 router.use(favorite)
@@ -65,7 +68,9 @@ router.use(verification)
 router.use(reportar)
 router.use(reportes)
 router.use(valiateIdentidad)
-
+router.use(banners)
+router.use(bannerSlug)
+router.use(descuentos)
 
 
 module.exports = router;

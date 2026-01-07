@@ -1,3 +1,4 @@
+const Campaign = require('../../models/Campaign');
 const Carrito = require('../../models/Carrito');
 const Producto = require('../../models/Productos');
 const User = require('../../models/User');
@@ -8,13 +9,13 @@ const User = require('../../models/User');
 const verProductosEnCarrito = async (req, res) => {
   try {
     const userId = req.user._id;
+    const hoy = new Date();
 
-    // CAMBIO AQUÍ: Hacemos populate del producto Y del vendedor dentro del producto
     const carrito = await Carrito.findOne({ user: userId }).populate({
       path: 'items.product',
       populate: {
         path: 'vendedor',
-        select: 'paymentMethods storeName slug' // Solo traemos lo que necesitamos
+        select: 'paymentMethods storeName slug'
       }
     });
 
@@ -22,20 +23,60 @@ const verProductosEnCarrito = async (req, res) => {
       return res.status(200).json({ items: [] });
     }
 
-    // Filtrar productos que pudieron ser eliminados de la DB
-    const itemsLimpios = carrito.items.filter(item => item.product !== null);
+    const itemsLimpios = carrito.items.filter(i => i.product !== null);
 
-    // Enviamos una respuesta enriquecida
-    return res.status(200).json({ 
-      items: itemsLimpios,
-      // Opcional: Enviamos los métodos del primer vendedor para facilitar el acceso en el front
-      paymentMethods: itemsLimpios.length > 0 ? itemsLimpios[0].product.vendedor?.paymentMethods : []
+    /* ================= DESCUENTOS ================= */
+    const descuentos = await Campaign.find({
+      active: true,
+      startDate: { $lte: hoy },
+      endDate: { $gte: hoy }
+    }).lean();
+
+    const discountMap = new Map();
+
+    descuentos.forEach(d => {
+      d.productos.forEach(pid => {
+        discountMap.set(pid.toString(), d);
+      });
     });
+
+    const itemsFinales = itemsLimpios.map(item => {
+      const product = item.product;
+      const descuento = discountMap.get(product._id.toString());
+
+      if (!descuento) {
+        return {
+          ...item.toObject(),
+          finalPrice: product.price,
+          hasDiscount: false
+        };
+      }
+
+      let finalPrice =
+        descuento.type === "percentage"
+          ? product.price * (1 - descuento.value / 100)
+          : product.price - descuento.value;
+
+      return {
+        ...item.toObject(),
+        finalPrice: Math.max(finalPrice, 0),
+        hasDiscount: true,
+        discount: {
+          name: descuento.name,
+          type: descuento.type,
+          value: descuento.value
+        }
+      };
+    });
+
+    res.json({ items: itemsFinales });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error retrieving carrito." });
   }
 };
+
 
 
 // ========================
@@ -134,46 +175,72 @@ const deleteProductoCarrito =async (req,res) =>{
 }
 const verCarritoPorTienda = async (req, res) => {
   try {
-    const { slug } = req.params; // Viene de la URL: /user/car/tienda/:slug
     const userId = req.user._id;
+    const hoy = new Date();
 
-    // 1. Buscar al vendedor por su slug
-    const vendedor = await User.findOne({ slug: slug, rol: "seller" });
-    
-    if (!vendedor) {
-      return res.status(404).json({ error: "La tienda no existe" });
-    }
-
-    // 2. Buscar el carrito del usuario y filtrar los items de ese vendedor
-    const carrito = await Carrito.findOne({ user: userId })
-      .populate({
-        path: 'items.product',
-        match: { vendedor: vendedor._id }, // Solo productos que pertenecen a este vendedor
-        populate: { 
-          path: 'vendedor', 
-          select: 'image slug paymentMethods storeName' // Traemos info útil de la tienda
-        }
-      });
-
-    if (!carrito) {
-      return res.json({ items: [], storeInfo: vendedor });
-    }
-
-    // 3. Limpiar los items que no pertenecen a esta tienda (vienen como null por el match)
-    const itemsFiltrados = carrito.items.filter(i => i.product !== null);
-
-    res.json({ 
-      items: itemsFiltrados,
-      storeInfo: {
-        name: vendedor.storeName,
-        image: vendedor.image,
-        payment: vendedor.paymentMethods // Útil para mostrar dónde pagar
+    const carrito = await Carrito.findOne({ user: userId }).populate({
+      path: 'items.product',
+      populate: {
+        path: 'vendedor',
+        select: 'paymentMethods storeName slug'
       }
     });
 
+    if (!carrito) {
+      return res.status(200).json({ items: [] });
+    }
+
+    const itemsLimpios = carrito.items.filter(i => i.product !== null);
+
+    /* ================= DESCUENTOS ================= */
+    const descuentos = await Campaign.find({
+      active: true,
+      startDate: { $lte: hoy },
+      endDate: { $gte: hoy }
+    }).lean();
+
+    const discountMap = new Map();
+
+    descuentos.forEach(d => {
+      d.productos.forEach(pid => {
+        discountMap.set(pid.toString(), d);
+      });
+    });
+
+    const itemsFinales = itemsLimpios.map(item => {
+      const product = item.product;
+      const descuento = discountMap.get(product._id.toString());
+
+      if (!descuento) {
+        return {
+          ...item.toObject(),
+          finalPrice: product.price,
+          hasDiscount: false
+        };
+      }
+
+      let finalPrice =
+        descuento.type === "percentage"
+          ? product.price * (1 - descuento.value / 100)
+          : product.price - descuento.value;
+
+      return {
+        ...item.toObject(),
+        finalPrice: Math.max(finalPrice, 0),
+        hasDiscount: true,
+        discount: {
+          name: descuento.name,
+          type: descuento.type,
+          value: descuento.value
+        }
+      };
+    });
+
+    res.json({ items: itemsFinales });
+
   } catch (error) {
-    console.error("Error en verCarritoPorTienda:", error);
-    res.status(500).json({ error: "Error interno al obtener el carrito" });
+    console.error(error);
+    res.status(500).json({ message: "Error retrieving carrito." });
   }
 };
 

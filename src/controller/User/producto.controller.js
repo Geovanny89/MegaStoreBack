@@ -1,36 +1,80 @@
-const Productos = require("../../models/Productos")
-const Suscripciones = require("../../models/Suscripcion"); // Importante importar el modelo
+const Campaign = require("../../models/Campaign");
+const Productos = require("../../models/Productos");
+const Suscripcion = require("../../models/Suscripcion");
+
 
 const productoUser = async (req, res) => {
-    try {
-        const hoy = new Date();
+  try {
+    const hoy = new Date();
 
-        // 1. Buscamos todas las suscripciones que estén vigentes (activa o trial)
-        const suscripcionesVigentes = await Suscripciones.find({
-            estado: { $in: ["activa", "trial"] },
-            fecha_vencimiento: { $gte: hoy }
-        }).select("id_usuario");
+    const suscripcionesVigentes = await Suscripcion.find({
+      estado: { $in: ["activa", "trial"] },
+      fecha_vencimiento: { $gte: hoy }
+    }).select("id_usuario");
 
-        // 2. Extraemos solo los IDs de los vendedores con suscripción válida
-        const idsVendedoresActivos = suscripcionesVigentes.map(s => s.id_usuario);
+    const idsVendedoresActivos = suscripcionesVigentes.map(s => s.id_usuario);
 
-        // 3. Buscamos los productos, pero filtramos por los vendedores activos
-        const allProducts = await Productos.find({
-            vendedor: { $in: idsVendedoresActivos } // Solo trae productos de estos vendedores
-        })
-        .populate("tipo", "name")
-        .populate("vendedor", "storeName image");
+    const productos = await Productos.find({
+      vendedor: { $in: idsVendedoresActivos }
+    })
+      .populate("tipo", "name")
+      .populate("vendedor", "storeName image")
+      .lean(); // 👈 MUY IMPORTANTE
 
-        if (!allProducts || allProducts.length === 0) {
-            return res.status(200).json([]); // Es mejor devolver [] que un 404 para que el front no explote
+    if (!productos.length) return res.json([]);
+
+    /* ================= DESCUENTOS ================= */
+
+    const descuentos = await Campaign.find({
+      active: true,
+      startDate: { $lte: hoy },
+      endDate: { $gte: hoy }
+    }).lean();
+
+    const discountMap = new Map();
+
+    descuentos.forEach(d => {
+      d.productos.forEach(productId => {
+        discountMap.set(productId.toString(), d);
+      });
+    });
+
+    const productosFinales = productos.map(product => {
+      const descuento = discountMap.get(product._id.toString());
+
+      if (!descuento) {
+        return {
+          ...product,
+          finalPrice: product.price,
+          hasDiscount: false
+        };
+      }
+
+      let finalPrice =
+        descuento.type === "percentage"
+          ? product.price * (1 - descuento.value / 100)
+          : product.price - descuento.value;
+
+      return {
+        ...product,
+        finalPrice: Math.max(finalPrice, 0),
+        hasDiscount: true,
+        discount: {
+          name: descuento.name,
+          type: descuento.type,
+          value: descuento.value
         }
+      };
+    });
 
-        res.status(200).json(allProducts);
-    } catch (error) {
-        console.error("Error en productoUser:", error);
-        res.status(500).json({ message: error.message });
-    }
+    res.json(productosFinales);
+
+  } catch (error) {
+    console.error("Error en productoUser:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
+
 
 const productxName = async(req,res)=>{
     try {
@@ -47,50 +91,59 @@ const productxName = async(req,res)=>{
         res.status(500).json({ message: error.message })
     }
 }
-// const productId = async (req, res) => {
-//     try {
-//         const { id } = req.params;
-//         console.log("ID recibido:", id); // Verificar el ID recibido
 
-//         if (!id) {
-//             res.status(404).send("No existe producto con ese ID");
-//             return;
-//         }
-
-//         // Cambia a findOne
-//         const product = await Productos.findOne({ _id: id });
-//         console.log("Producto encontrado:", product); // Verificar el producto encontrado
-
-//         if (!product) {
-//             res.status(404).send("No existe producto con ese ID");
-//             return;
-//         }
-
-//         res.status(200).send(product);
-//     } catch (error) {
-//         console.error("Error al buscar el producto:", error); // Mejor manejo del error
-//         res.status(500).json({ message: error.message });
-//     }
-// };
 const productId = async (req, res) => {
   try {
+    const hoy = new Date();
     const { id } = req.params;
 
     const product = await Productos.findById(id)
       .populate("tipo", "name")
-      .populate("vendedor", "storeName");
+      .populate("vendedor", "storeName")
+      .lean();
 
-      console.log("este es el vendedor " , product);
     if (!product) {
       return res.status(404).send("No existe producto con ese ID");
     }
 
-    res.status(200).send(product);
+    const descuento = await Campaign.findOne({
+      active: true,
+      productos: id,
+      startDate: { $lte: hoy },
+      endDate: { $gte: hoy }
+    }).lean();
+
+    if (!descuento) {
+      return res.json({
+        ...product,
+        finalPrice: product.price,
+        hasDiscount: false
+      });
+    }
+
+    let finalPrice =
+      descuento.type === "percentage"
+        ? product.price * (1 - descuento.value / 100)
+        : product.price - descuento.value;
+
+    res.json({
+      ...product,
+      finalPrice: Math.max(Math.round(finalPrice), 0),
+      hasDiscount: true,
+      discount: {
+        name: descuento.name,
+        type: descuento.type,
+        value: descuento.value
+      }
+    });
+
   } catch (error) {
-    console.error(error);
+    console.error("Error en productId:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 module.exports ={
     productoUser,

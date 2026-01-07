@@ -59,11 +59,14 @@ const {
   getMyProducts,
   createSellerProduct,
   updateSellerProduct,
-  deleteSellerProduct
+  deleteSellerProduct,
+  importProductsFromExcel
 } = require("../../controller/Seller/productos.vendedor.controller");
 const { sellerActiveMiddleware } = require("../../middleware/sellerActiveMiddleware");
 const requireSellerVerified = require("../../middleware/requireSellerVerified");
+const uploadImport = require("../../middleware/uploadImport");
 
+/* ================= RUTAS ================= */
 // RUTAS ACTUALIZADAS
 router.get("/seller/productos", authMiddleware, checkRol(["seller"]), getMyProducts);
 
@@ -89,5 +92,16 @@ router.put(
 );
 
 router.delete("/seller/productos/:id", authMiddleware, sellerActiveMiddleware, checkRol(["seller"]),requireSellerVerified, deleteSellerProduct);
+/* ===== NUEVA RUTA DE IMPORTACIÓN ===== */
+
+router.post(
+  "/seller/productos/import",
+  authMiddleware,
+  checkRol(["seller"]),
+  requireSellerVerified,
+  sellerActiveMiddleware,
+  uploadImport,
+  importProductsFromExcel
+);
 
 module.exports = router;

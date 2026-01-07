@@ -1,6 +1,7 @@
 const Productos = require("../../models/Productos");
 const Suscripcion = require("../../models/Suscripcion");
 const User = require("../../models/User");
+const Campaign = require('../../models/Campaign')
 
 const vendedor = async (req, res) => {
   try {
@@ -57,7 +58,7 @@ const vendedorById = async (req, res) => {
 
     // 1. Buscamos al vendedor
     const vendor = await User.findById(req.params.id)
-      .select("storeName image");
+      .select("storeName image slug");
 
     if (!vendor) {
       return res.status(404).json({ message: "Vendedor no encontrado" });
@@ -65,7 +66,7 @@ const vendedorById = async (req, res) => {
 
     // 🔥 2. VALIDACIÓN DE SUSCRIPCIÓN/TRIAL
     // Buscamos si existe una suscripción vigente para este ID de usuario
-    const suscripcionVigente = await Suscripciones.findOne({
+    const suscripcionVigente = await Suscripcion.findOne({
       id_usuario: req.params.id,
       estado: { $in: ["activa", "trial"] }, // Debe ser activa o estar en trial
       fecha_vencimiento: { $gte: hoy }      // La fecha de vencimiento debe ser mayor o igual a HOY
@@ -82,11 +83,64 @@ const vendedorById = async (req, res) => {
     }
 
     // 4. Si la suscripción es válida, buscamos los productos normalmente
-    const productos = await Productos.find({ vendedor: req.params.id })
-      .select("name price image stock tipo brand description rating") // Añadí campos que usa tu frontend
-      .populate("tipo", "name"); // Para que funcione tu filtro de categorías
+   // 4. Productos del vendedor
+const productos = await Productos.find({ vendedor: req.params.id })
+  .select("name price image stock tipo brand description rating")
+  .populate("tipo", "name");
 
-    res.json({ vendedor: vendor, productos });
+// 5. Traer descuentos activos del vendedor
+const descuentos = await Campaign.find({
+  vendedor: req.params.id,
+  active: true,
+  startDate: { $lte: hoy },
+  endDate: { $gte: hoy }
+});
+
+// 6. Mapa producto → descuento
+const discountMap = new Map();
+
+descuentos.forEach(d => {
+  d.productos.forEach(prodId => {
+    discountMap.set(prodId.toString(), d);
+  });
+});
+
+// 7. Aplicar descuentos a productos
+const productosConDescuento = productos.map(p => {
+  const descuento = discountMap.get(p._id.toString());
+
+  if (!descuento) {
+    return {
+      ...p.toObject(),
+      hasDiscount: false,
+      finalPrice: p.price
+    };
+  }
+
+  let finalPrice = p.price;
+
+  if (descuento.type === "percentage") {
+    finalPrice = p.price * (1 - descuento.value / 100);
+  } else {
+    finalPrice = p.price - descuento.value;
+  }
+
+  return {
+    ...p.toObject(),
+    hasDiscount: true,
+    finalPrice: Math.max(finalPrice, 0),
+    discount: {
+      type: descuento.type,
+      value: descuento.value
+    }
+  };
+});
+
+// 8. RESPUESTA FINAL
+res.json({
+  vendedor: vendor,
+  productos: productosConDescuento
+});
 
   } catch (error) {
     console.error("Error en vendedorById:", error);

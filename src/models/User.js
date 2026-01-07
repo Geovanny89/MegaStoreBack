@@ -117,23 +117,43 @@ const userSchema = new mongoose.Schema(
     paymentDate: { type: Date, default: null },
 
     /* ================= MÉTODOS DE PAGO ================= */
-    paymentMethods: [
-      {
-        type: {
-          type: String,
-          enum: ["phone", "email", "document", "random"],
-          required: true
-        },
-        value: { type: String, required: true },
-        provider: {
-          type: String,
-          enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro"],
-          required: true
-        },
-        qr: { type: String, default: null },
-        active: { type: Boolean, default: true }
-      }
-    ],
+paymentMethods: {
+  type: [
+    {
+      type: {
+        type: String,
+        enum: ["phone", "email", "document", "random", "cod"],
+        required: true
+      },
+      value: { 
+        type: String, 
+        required: function () {
+          return this.type !== "cod";
+        }
+      },
+      provider: {
+        type: String,
+        enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro", "cod"],
+        required: true
+      },
+      qr: { type: String, default: null },
+      active: { type: Boolean, default: true }
+    }
+  ],
+  validate: {
+    validator: function (methods) {
+      // 1️⃣ No aplica si no es seller
+      if (this.rol !== "seller") return true;
+
+      // 2️⃣ Durante el registro (identidad pendiente) NO exigir pagos
+      if (this.sellerStatus === "pending_identity") return true;
+
+      // 3️⃣ En cualquier otro estado SÍ exigir COD
+      return Array.isArray(methods) && methods.some(m => m.type === "cod");
+    },
+    message: "El método de pago contraentrega es obligatorio."
+  }
+},
 
     /* ================= PLAN DE SUSCRIPCIÓN ================= */
     subscriptionPlan: {

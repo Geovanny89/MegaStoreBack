@@ -129,7 +129,7 @@ const markOrderShipped = async (req, res) => {
     await order.save();
 
     await transporter.sendMail({
-      from: "no-reply@megastore.com",
+      from: "notificaciones@k-dice.com",
       to: order.user.email,
       subject: `Pedido enviado`,
       html: `<p>Tu pedido #${order._id} fue enviado.</p>`

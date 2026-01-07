@@ -2,6 +2,7 @@ const Productos = require('../../models/Productos')
 const TipoProductos = require('../../models/TipoProductos');
 const cloudinary = require('../../utils/cloudinary');
 const Suscripciones = require('../../models/Suscripcion');
+const Campaign = require("../../models/Campaign");
 
 /**
  * Obtener todos los productos.
@@ -265,22 +266,62 @@ const deleteProduct = async (req, res) => {
   }
 };
 
+
+
 const getProductId = async (req, res) => {
   try {
-    const product = await Productos.findById(req.params.id)
+    const hoy = new Date();
+    const { id } = req.params;
+
+    const product = await Productos.findById(id)
       .populate("tipo", "name")
-      .populate("vendedor", "storeName");
+      .populate("vendedor", "storeName")
+      .lean();
 
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
-    res.json(product);
+    const price = Number(product.price);
+
+    const descuento = await Campaign.findOne({
+      vendedor: product.vendedor._id,
+      active: true,
+      productos: id,
+      startDate: { $lte: hoy },
+      endDate: { $gte: hoy }
+    }).lean();
+
+    if (!descuento) {
+      return res.json({
+        ...product,
+        finalPrice: price,
+        hasDiscount: false
+      });
+    }
+
+    let finalPrice =
+      descuento.type === "percentage"
+        ? price * (1 - descuento.value / 100)
+        : price - descuento.value;
+
+    res.json({
+      ...product,
+      finalPrice: Math.max(Math.round(finalPrice), 0),
+      hasDiscount: true,
+      discount: {
+        name: descuento.name,
+        type: descuento.type,
+        value: descuento.value
+      }
+    });
+
   } catch (error) {
-    console.error(error);
+    console.error("Error en getProductId:", error);
     res.status(500).json({ message: "Error interno del servidor" });
   }
-}
+};
+
 module.exports = {
   allProduct,
   productName,
