@@ -29,7 +29,7 @@ router.post(
 
 // Listar banners del vendedor (panel)
 router.get(
-  "/allBanners",
+  "/seller/allBanners",
   authMiddleware,
   checkRol(["seller"]),
   listarMisBanners
