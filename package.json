@@ -15,6 +15,7 @@
     "adm-zip": "^0.5.16",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.3",
+    "canvas": "^3.2.0",
     "cloudinary": "^2.1.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",

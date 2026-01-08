@@ -138,10 +138,142 @@ const welcomeSellerMail = (email, name) => {
     attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
   };
 };
+/* ===================== CORREO NUEVA VENTA (VENDEDOR) ===================== */
+const sellerNewOrderMail = (sellerEmail, sellerName, order) => {
+  const currentDate = new Date().toLocaleString("es-CO");
+  
+  // Mapeo de productos para la tabla
+  const productRows = order.products.map(item => `
+    <tr>
+      <td style="padding: 10px; border-bottom: 1px solid #edf2f7;">${item.productName}</td>
+      <td style="padding: 10px; border-bottom: 1px solid #edf2f7; text-align: center;">${item.quantity}</td>
+      <td style="padding: 10px; border-bottom: 1px solid #edf2f7; text-align: right;">$${item.price.toLocaleString()}</td>
+    </tr>
+  `).join('');
 
+  return {
+    from: OFFICIAL_FROM,
+    to: sellerEmail,
+    subject: `💰 ¡Nueva Venta Realizada! - Orden #${order._id.toString().slice(-6)}`,
+    html: `
+      <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        <div style="background-color: #064e3b; padding: 30px; text-align: center; color: white;">
+          <h1 style="margin: 0; font-size: 22px;">¡Tienes una nueva venta!</h1>
+          <p style="opacity: 0.9;">Orden ID: ${order._id}</p>
+        </div>
+        <div style="padding: 30px; background-color: white;">
+          <p>Hola <strong>${sellerName}</strong>,</p>
+          <p>Se ha generado una nueva orden en tu tienda. Aquí están los detalles:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <thead>
+              <tr style="background-color: #f8fafc;">
+                <th style="padding: 10px; text-align: left;">Producto</th>
+                <th style="padding: 10px; text-align: center;">Cant.</th>
+                <th style="padding: 10px; text-align: right;">Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${productRows}
+            </tbody>
+          </table>
+
+          <div style="background-color: #f0fdf4; padding: 20px; border-radius: 8px; margin-top: 20px;">
+            <p style="margin: 5px 0;"><strong>Total a recibir:</strong> $${order.total.toLocaleString()}</p>
+            <p style="margin: 5px 0;"><strong>Método de pago:</strong> ${order.paymentMethod}</p>
+            <p style="margin: 5px 0;"><strong>Entrega:</strong> ${order.deliveryMethod === 'delivery' ? 'Domicilio' : 'Retiro en punto'}</p>
+          </div>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://www.k-dice.com/orders" 
+               style="background-color: #10b981; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+               Gestionar Pedido
+            </a>
+          </div>
+        </div>
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #64748b;">
+          Este es un aviso automático de K-DICE Marketplace.
+        </div>
+      </div>
+    `,
+    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+  };
+};
+/* ===================== CORREO NUEVO MENSAJE DE CHAT ===================== */
+const chatNotificationMail = (toEmail, toName, senderName, messageText, orderId) => {
+  return {
+    from: OFFICIAL_FROM,
+    to: toEmail,
+    subject: `💬 Nuevo mensaje de ${senderName} en la orden #${orderId.toString().slice(-6)}`,
+    html: `
+      <div style="max-width: 500px; margin: auto; font-family: sans-serif; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+        <div style="background-color: #10b981; padding: 20px; text-align: center; color: white;">
+          <h2 style="margin: 0;">¡Tienes un nuevo mensaje!</h2>
+        </div>
+        <div style="padding: 30px;">
+          <p>Hola <strong>${toName}</strong>,</p>
+          <p>Has recibido un nuevo mensaje sobre la orden <strong>#${orderId}</strong>:</p>
+          
+          <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; font-style: italic; color: #374151; border-left: 4px solid #10b981;">
+            "${messageText}"
+          </div>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://www.k-dice.com/orders/${orderId}" 
+               style="background-color: #064e3b; color: white; padding: 12px 20px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+               Responder en el Chat
+            </a>
+          </div>
+        </div>
+      </div>
+    `
+  };
+};
+
+/* ===================== CORREO COMPROBANTE RECIBIDO ===================== */
+const paymentProofNotificationMail = (sellerEmail, sellerName, orderId, buyerName) => {
+  return {
+    from: OFFICIAL_FROM,
+    to: sellerEmail,
+    subject: `💳 Comprobante de pago recibido - Orden #${orderId.toString().slice(-6)}`,
+    html: `
+      <div style="max-width: 600px; margin: auto; font-family: Arial, sans-serif; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+        <div style="background-color: #1e40af; padding: 30px; text-align: center; color: white;">
+          <h1 style="margin: 0; font-size: 22px;">Nuevo Comprobante de Pago</h1>
+          <p style="opacity: 0.9;">Orden ID: ${orderId}</p>
+        </div>
+        <div style="padding: 30px; background-color: white;">
+          <p>Hola <strong>${sellerName}</strong>,</p>
+          <p>El cliente <strong>${buyerName}</strong> ha subido el comprobante de pago para la orden indicada.</p>
+          
+          <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #1e40af;">
+            <p style="margin: 0; color: #1e3a8a;"><strong>Acción requerida:</strong> Por favor, ingresa a tu panel de vendedor para verificar el comprobante y marcar el pago como confirmado.</p>
+          </div>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://www.k-dice.com/ordenes/${orderId}" 
+               style="background-color: #1e40af; color: white; padding: 12px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+               Ver Comprobante en Panel
+            </a>
+          </div>
+        </div>
+        <div style="background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #64748b;">
+          Este es un aviso automático de K-DICE Marketplace.
+        </div>
+      </div>
+    `,
+    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+  };
+};
+
+// Recuerda agregar 'paymentProofNotificationMail' al module.exports
+// No olvides añadirlo al module.exports
 module.exports = {
   transporter,
   mailDetails,
   notificationMail,
-  welcomeSellerMail
+  welcomeSellerMail,
+  sellerNewOrderMail,
+  chatNotificationMail,
+  paymentProofNotificationMail
 };

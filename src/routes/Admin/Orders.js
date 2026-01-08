@@ -7,7 +7,7 @@ const upload = multer({ storage });
 const authMiddleware = require("../../middleware/sesion");
 const checkRol = require("../../middleware/rol");
 
-const {
+const { 
   getSellerOrders,
   markOrderProcessing,
   markOrderShipped,

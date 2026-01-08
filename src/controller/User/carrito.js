@@ -43,12 +43,18 @@ const verProductosEnCarrito = async (req, res) => {
     const itemsFinales = itemsLimpios.map(item => {
       const product = item.product;
       const descuento = discountMap.get(product._id.toString());
+          // 🔹 NORMALIZAR POLÍTICA DE ENVÍO
+      const shippingPolicy = (product.shippingPolicy || "coordinar")
+        .trim()
+        .toLowerCase();
 
       if (!descuento) {
         return {
           ...item.toObject(),
           finalPrice: product.price,
-          hasDiscount: false
+          hasDiscount: false,
+          shippingPolicy,
+          vendedor: product.vendedor
         };
       }
 
@@ -61,6 +67,8 @@ const verProductosEnCarrito = async (req, res) => {
         ...item.toObject(),
         finalPrice: Math.max(finalPrice, 0),
         hasDiscount: true,
+        shippingPolicy,
+        vendedor: product.vendedor,
         discount: {
           name: descuento.name,
           type: descuento.type,
@@ -179,15 +187,15 @@ const verCarritoPorTienda = async (req, res) => {
     const hoy = new Date();
 
     const carrito = await Carrito.findOne({ user: userId }).populate({
-      path: 'items.product',
+      path: "items.product",
       populate: {
-        path: 'vendedor',
-        select: 'paymentMethods storeName slug'
+        path: "vendedor",
+        select: "paymentMethods storeName slug"
       }
     });
 
     if (!carrito) {
-      return res.status(200).json({ items: [] });
+      return res.status(200).json({ tiendas: [] });
     }
 
     const itemsLimpios = carrito.items.filter(i => i.product !== null);
@@ -207,42 +215,81 @@ const verCarritoPorTienda = async (req, res) => {
       });
     });
 
-    const itemsFinales = itemsLimpios.map(item => {
+    /* ================= AGRUPAR POR TIENDA ================= */
+    const tiendasMap = new Map();
+
+    itemsLimpios.forEach(item => {
       const product = item.product;
+      const vendedor = product.vendedor;
+      const tiendaId = vendedor._id.toString();
+
       const descuento = discountMap.get(product._id.toString());
 
-      if (!descuento) {
-        return {
-          ...item.toObject(),
-          finalPrice: product.price,
-          hasDiscount: false
-        };
-      }
+      // Normalizar política de envío
+      const shippingPolicy = (product.shippingPolicy || "coordinar")
+        .trim()
+        .toLowerCase();
 
-      let finalPrice =
-        descuento.type === "percentage"
-          ? product.price * (1 - descuento.value / 100)
-          : product.price - descuento.value;
+      let finalPrice = product.price;
+      let hasDiscount = false;
+      let discount = null;
 
-      return {
-        ...item.toObject(),
-        finalPrice: Math.max(finalPrice, 0),
-        hasDiscount: true,
-        discount: {
+      if (descuento) {
+        finalPrice =
+          descuento.type === "percentage"
+            ? product.price * (1 - descuento.value / 100)
+            : product.price - descuento.value;
+
+        finalPrice = Math.max(finalPrice, 0);
+        hasDiscount = true;
+        discount = {
           name: descuento.name,
           type: descuento.type,
           value: descuento.value
-        }
+        };
+      }
+
+      const productoFinal = {
+        ...item.toObject(),
+        finalPrice,
+        hasDiscount,
+        shippingPolicy,
+        discount
       };
+
+      if (!tiendasMap.has(tiendaId)) {
+        tiendasMap.set(tiendaId, {
+          vendedor: {
+            _id: vendedor._id,
+            storeName: vendedor.storeName,
+            slug: vendedor.slug,
+            paymentMethods: vendedor.paymentMethods
+          },
+          shippingPolicy, // inicial
+          items: [productoFinal]
+        });
+      } else {
+        const tienda = tiendasMap.get(tiendaId);
+
+        // Si un producto NO es free → la tienda ya no es free
+        if (tienda.shippingPolicy === "free" && shippingPolicy !== "free") {
+          tienda.shippingPolicy = "coordinar";
+        }
+
+        tienda.items.push(productoFinal);
+      }
     });
 
-    res.json({ items: itemsFinales });
+    res.json({
+      tiendas: Array.from(tiendasMap.values())
+    });
 
   } catch (error) {
-    console.error(error);
+    console.error("Error verCarritoPorTienda:", error);
     res.status(500).json({ message: "Error retrieving carrito." });
   }
 };
+
 
 module.exports = {
   agregarProductoAlCarrito,

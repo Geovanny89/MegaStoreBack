@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Order = require('../../models/Order');
 const Productos = require('../../models/Productos');
 const User = require('../../models/User');
-const { transporter, mailDetails } = require("../../mailer/nodemailer"); // nodemailer
+const { transporter, mailDetails, sellerNewOrderMail, paymentProofNotificationMail } = require("../../mailer/nodemailer"); // nodemailer
 const Notification = require('../../models/Notification');
 const cloudinary = require("../../utils/cloudinary");
 const detectDevice = require("../../utils/detectDevice");
@@ -164,7 +164,17 @@ const createOrder = async (req, res) => {
       status: "pending",
       isRead: false
     });
-
+/* ============================================================
+        🔥 ENVÍO DE CORREO AL VENDEDOR
+       ============================================================ */
+    try {
+      const mailOptions = sellerNewOrderMail(seller.email, seller.name, order);
+      await transporter.sendMail(mailOptions);
+      console.log(`Correo de venta enviado a: ${seller.email}`);
+    } catch (mailError) {
+      // Usamos un catch aquí para que, si falla el correo, la orden no se rompa
+      console.error("Error enviando correo al vendedor:", mailError);
+    }
     // 5. Vaciar carrito del usuario
     await Carrito.findOneAndUpdate(
       { user: userId },
@@ -266,6 +276,7 @@ const uploadPaymentProof = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user.id;
+    const buyerName = req.user.name || "Un cliente";
 
     if (!req.file) {
       return res.status(400).json({
@@ -336,6 +347,28 @@ const uploadPaymentProof = async (req, res) => {
         { upsert: true, new: true } // upsert: true crea la notificación si es la primera vez
       );
     }
+    try {
+        const seller = await User.findById(sellerId);
+        
+        if (seller && seller.email) {
+          const mailOptions = paymentProofNotificationMail(
+            seller.email,
+            seller.name,
+            order._id,
+            buyerName
+          );
+
+          // Enviamos el correo (sin await para no demorar la respuesta al cliente)
+          transporter.sendMail(mailOptions).catch(err => 
+            console.error("Error enviando correo de comprobante:", err)
+          );
+          
+          console.log(`📧 Aviso de comprobante enviado a: ${seller.email}`);
+        }
+      } catch (mailDbError) {
+        console.error("Error buscando email del vendedor:", mailDbError);
+      }
+    
 
     res.json({
       message: "Comprobante enviado correctamente",
