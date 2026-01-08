@@ -1,49 +1,58 @@
 const { mongoose, Schema } = require('mongoose');
 
 const productosSchema = mongoose.Schema({
-    name: {
-        type: String,
-        required: true // Corrección aquí
-    },
-    brand: {
-        type: String,
-       
-    },
-    price: {
-        type: String,
-        required: true // Corrección aquí
-    },
-    sise: [{
-        type: String // Este campo permite múltiples tallas
-    }],
-    color: [{
-        type: String // Este campo permite múltiples colores
-    }],
-    stock: {
-        type: Number,
-        required: true // Corrección aquí
-    },
-    description: {
-        type: String
-    },
-   image: [
-  {
-    url: { type: String, required: true },
-    public_id: { type: String, required: true }
-  }
-],
+  name: {
+    type: String,
+    required: true // Corrección aquí
+  },
+  brand: {
+    type: String,
 
-    tipo: { 
-        type: Schema.Types.ObjectId, 
-        ref: 'TipoProductos',
-        required: true 
-    }, 
-    vendedor: {
-  type: Schema.Types.ObjectId,
-  ref: "User",
-  required: true
-},
- rating: {
+  },
+  price: {
+    type: String,
+    required: true // Corrección aquí
+  },
+  sise: [{
+    type: String // Este campo permite múltiples tallas
+  }],
+  color: [{
+    type: String // Este campo permite múltiples colores
+  }],
+  stock: {
+    type: Number,
+    required: true // Corrección aquí
+  },
+  description: {
+    type: String
+  },
+  image: [
+    {
+      url: { type: String, required: true },
+      public_id: { type: String, required: true }
+    }
+  ],
+
+  tipo: {
+    type: Schema.Types.ObjectId,
+    ref: 'TipoProductos',
+    required: true
+  },
+  vendedor: {
+    type: Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+  shippingPolicy: {
+    type: String,
+    enum: ["free", "coordinar"],
+    default: "coordinar"
+  },
+
+  shippingNote: {
+    type: String
+  },
+  rating: {
     average: {
       type: Number,
       default: 0
@@ -53,7 +62,7 @@ const productosSchema = mongoose.Schema({
       default: 0
     }
   }
- 
+
 
 });
 

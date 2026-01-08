@@ -1,4 +1,4 @@
-const Campaign = require('../../models/Campaign');
+const Descuento = require('../../models/Descuento');
 const Carrito = require('../../models/Carrito');
 const Producto = require('../../models/Productos');
 const User = require('../../models/User');
@@ -26,7 +26,7 @@ const verProductosEnCarrito = async (req, res) => {
     const itemsLimpios = carrito.items.filter(i => i.product !== null);
 
     /* ================= DESCUENTOS ================= */
-    const descuentos = await Campaign.find({
+    const descuentos = await Descuento.find({
       active: true,
       startDate: { $lte: hoy },
       endDate: { $gte: hoy }
@@ -193,7 +193,7 @@ const verCarritoPorTienda = async (req, res) => {
     const itemsLimpios = carrito.items.filter(i => i.product !== null);
 
     /* ================= DESCUENTOS ================= */
-    const descuentos = await Campaign.find({
+    const descuentos = await Descuento.find({
       active: true,
       startDate: { $lte: hoy },
       endDate: { $gte: hoy }

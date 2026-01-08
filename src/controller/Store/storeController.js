@@ -3,7 +3,7 @@ const Product = require("../../models/Productos");
 
 const getStoreBySlug = async (req, res) => {
   try {
-    console.log("SLUG RECIBIDO:", req.params.slug);
+
     const { slug } = req.params;
 
     // 1. Buscamos al vendedor por su slug

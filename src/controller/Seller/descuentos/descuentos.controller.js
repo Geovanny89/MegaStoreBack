@@ -1,4 +1,4 @@
-const Campaign = require("../../../models/Campaign");
+const Descuento = require("../../../models/Descuento");
 const Productos = require("../../../models/Productos");
 
 /* =====================================================
@@ -6,14 +6,7 @@ const Productos = require("../../../models/Productos");
 ===================================================== */
 const createDescuento = async (req, res) => {
   try {
-    const {
-      name,
-      type,
-      value,
-      productos,
-      startDate,
-      endDate
-    } = req.body;
+    const { name, type, value, productos, startDate, endDate } = req.body;
 
     if (!name || !type || !value || !productos?.length || !startDate || !endDate) {
       return res.status(400).json({ error: "Datos incompletos" });
@@ -23,7 +16,6 @@ const createDescuento = async (req, res) => {
       return res.status(400).json({ error: "El valor del descuento debe ser mayor a 0" });
     }
 
-    // (Opcional) Validar que los productos pertenezcan al vendedor
     const count = await Productos.countDocuments({
       _id: { $in: productos },
       vendedor: req.user.id
@@ -33,28 +25,44 @@ const createDescuento = async (req, res) => {
       return res.status(403).json({ error: "Algunos productos no te pertenecen" });
     }
 
-    const descuento = await Campaign.create({
+    // ✅ NORMALIZACIÓN CORRECTA EN UTC
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
+
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
+    // 🔒 Protección extra (opcional pero recomendada)
+    if (end < new Date()) {
+      return res.status(400).json({ error: "El descuento no puede terminar en el pasado" });
+    }
+
+    const descuento = await Descuento.create({
       name,
       type,
       value,
       productos,
-      startDate,
-      endDate,
-      vendedor: req.user.id
+      startDate: start,
+      endDate: end,
+      vendedor: req.user.id,
+      active: true
     });
 
     res.status(201).json(descuento);
+
   } catch (error) {
-    console.error(error);
+    console.error("Error creando descuento:", error);
     res.status(500).json({ error: "Error al crear el descuento" });
   }
 };
+
+
 
 const updateDescuento = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const descuento = await Campaign.findOne({
+    const descuento = await Descuento.findOne({
       _id: id,
       vendedor: req.user.id
     });
@@ -77,7 +85,7 @@ const deleteDescuento = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const descuento = await Campaign.findOneAndDelete({
+    const descuento = await Descuento.findOneAndDelete({
       _id: id,
       vendedor: req.user.id
     });
@@ -102,7 +110,7 @@ const toggleDescuento = async (req, res) => {
       return res.status(400).json({ error: "Estado inválido" });
     }
 
-    const descuento = await Campaign.findOneAndUpdate(
+    const descuento = await Descuento.findOneAndUpdate(
       { _id: id, vendedor: req.user.id },
       { active },
       { new: true }
@@ -120,7 +128,7 @@ const toggleDescuento = async (req, res) => {
 };
 const getMyDescuentos = async (req, res) => {
   try {
-    const descuentos = await Campaign.find({
+    const descuentos = await Descuento.find({
       vendedor: req.user.id
     }).sort({ createdAt: -1 });
 

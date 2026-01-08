@@ -1,4 +1,4 @@
-const Campaign = require("../../models/Campaign");
+const Descuento = require("../../models/Descuento");
 const Productos = require("../../models/Productos");
 const Suscripcion = require("../../models/Suscripcion");
 
@@ -25,7 +25,7 @@ const productoUser = async (req, res) => {
 
     /* ================= DESCUENTOS ================= */
 
-    const descuentos = await Campaign.find({
+    const descuentos = await Descuento.find({
       active: true,
       startDate: { $lte: hoy },
       endDate: { $gte: hoy }
@@ -106,7 +106,7 @@ const productId = async (req, res) => {
       return res.status(404).send("No existe producto con ese ID");
     }
 
-    const descuento = await Campaign.findOne({
+    const descuento = await Descuento.findOne({
       active: true,
       productos: id,
       startDate: { $lte: hoy },

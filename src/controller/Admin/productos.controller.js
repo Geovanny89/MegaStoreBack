@@ -2,7 +2,7 @@ const Productos = require('../../models/Productos')
 const TipoProductos = require('../../models/TipoProductos');
 const cloudinary = require('../../utils/cloudinary');
 const Suscripciones = require('../../models/Suscripcion');
-const Campaign = require("../../models/Campaign");
+const Descuento = require("../../models/Descuento");
 
 /**
  * Obtener todos los productos.
@@ -62,7 +62,7 @@ const productName = async (req, res) => {
 
 const createProduct = async (req, res) => {
   try {
-    const { name, price, brand, tipoId, color, stock, description, sise } = req.body;
+    const { name, price, brand, tipoId, color, stock, description, sise,shippingPolicy,shippingNote } = req.body;
 
     // Validar producto duplicado
     const existingProduct = await Productos.findOne({ name });
@@ -153,7 +153,16 @@ const createProduct = async (req, res) => {
   )
 );
 
+ /* ================= VALIDAR SHIPPING ================= */
+const allowedPolicies = ["free", "coordinar"];
+    const normalizedPolicy = shippingPolicy?.toLowerCase();
 
+    const finalShippingPolicy = allowedPolicies.includes(normalizedPolicy)
+      ? normalizedPolicy
+      : "coordinar";
+
+    const finalShippingNote =
+      finalShippingPolicy === "coordinar" ? shippingNote || "" : "";
     // Crear producto
     const product = new Productos({
       name,
@@ -165,7 +174,9 @@ const createProduct = async (req, res) => {
       color: colorsArray,
       image: imageUrls,
       tipo: tipoId,
-      vendedor: sellerId
+      vendedor: sellerId,
+      shippingPolicy: finalShippingPolicy,
+      shippingNote: shippingNote || ""
     });
 
     await product.save();
@@ -189,7 +200,8 @@ const createProduct = async (req, res) => {
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params
-    console.log("hola soy el id", id)
+    
+   
 
     if (!id) {
       res.status(404).send("No existe producto con ese ID")
@@ -200,7 +212,7 @@ const updateProduct = async (req, res) => {
       res.status(404).send("No existe producto con ese ID.");
       return;
     }
-    const { name, price, image, stock, brand, description } = req.body
+    const { name, price, image, stock, brand, description,shippingPolicy,shippingNote } = req.body
     const updateFields = {};
     if (name) {
       updateFields.name = name;
@@ -220,9 +232,35 @@ const updateProduct = async (req, res) => {
     if (description) {
       updateFields.description = description;
     }
-    const update = await Productos.findByIdAndUpdate(id, updateFields, { new: true });
-    res.status(200).send(update)
+    /* ================= LÓGICA DE ENVÍO ================= */
+    
+    // Si viene la política de envío, la validamos y normalizamos
+    if (shippingPolicy) {
+      const normalizedPolicy = shippingPolicy.toLowerCase();
+      if (["free", "coordinar"].includes(normalizedPolicy)) {
+        updateFields.shippingPolicy = normalizedPolicy;
+      }
+    }
 
+    // Manejo de la nota de envío
+    // Si la política es 'free', la nota debe estar vacía obligatoriamente
+    const currentPolicy = updateFields.shippingPolicy || existingProduct.shippingPolicy;
+    
+    if (currentPolicy === "free") {
+      updateFields.shippingNote = ""; 
+    } else if (shippingNote !== undefined) {
+      // Si es 'coordinar', aceptamos la nota que venga en el body
+      updateFields.shippingNote = shippingNote;
+    }
+
+    /* =================================================== */
+
+    const updated = await Productos.findByIdAndUpdate(
+      id,
+      { $set: updateFields }, // Usamos $set para ser explícitos
+      { new: true, runValidators: true } // runValidators asegura que respete el enum del modelo
+    );
+ res.status(200).json(updated);
   } catch (error) {
     console.log(error)
     res.status(500).json({ message: error.message })
@@ -281,16 +319,20 @@ const getProductId = async (req, res) => {
     if (!product) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
-
+const shippingInfo = {
+      isFree: product.shippingPolicy === "free",
+      label: product.shippingPolicy === "free" ? "Envío Gratis" : "Envío a coordinar",
+      note: product.shippingNote || ""
+    };
     const price = Number(product.price);
 
-    const descuento = await Campaign.findOne({
+    const descuento = await Descuento.findOne({
       vendedor: product.vendedor._id,
       active: true,
       productos: id,
       startDate: { $lte: hoy },
       endDate: { $gte: hoy }
-    }).lean();
+    }).lean(); 
 
     if (!descuento) {
       return res.json({
@@ -304,7 +346,7 @@ const getProductId = async (req, res) => {
       descuento.type === "percentage"
         ? price * (1 - descuento.value / 100)
         : price - descuento.value;
-
+ 
     res.json({
       ...product,
       finalPrice: Math.max(Math.round(finalPrice), 0),
@@ -312,7 +354,10 @@ const getProductId = async (req, res) => {
       discount: {
         name: descuento.name,
         type: descuento.type,
-        value: descuento.value
+        value: descuento.value,
+        startDate: descuento.startDate,  // <-- agregamos la fecha de inicio
+        endDate: descuento.endDate,
+        shipping: shippingInfo,
       }
     });
 

@@ -25,7 +25,7 @@ const getMyProducts = async (req, res) => {
  */
 const createSellerProduct = async (req, res) => {
   try {
-    const { name, price, brand, tipoId, color, stock, description, sise } = req.body;
+    const { name, price, brand, tipoId, color, stock, description, sise,shippingPolicy,shippingNote } = req.body;
     const sellerId = req.user.id;
 
     // Validar duplicado por vendedor
@@ -77,6 +77,11 @@ if (!suscripcion) {
         if (!file.buffer) {
           throw new Error("Archivo de imagen inválido");
         }
+/* ================= ENVÍO ================= */
+    const allowedPolicies = ["free", "coordinar"];
+    const finalShippingPolicy = allowedPolicies.includes(shippingPolicy)
+      ? shippingPolicy
+      : "coordinar";
 
         return new Promise((resolve, reject) => {
           const upload = cloudinary.uploader.upload_stream(
@@ -108,7 +113,9 @@ if (!suscripcion) {
       color: colorsArray,
       image: imageUrls,
       tipo: tipoId,
-      vendedor: sellerId
+      vendedor: sellerId,
+       shippingPolicy: finalShippingPolicy,
+      shippingNote: shippingNote || ""
     });
 
     await nuevoProducto.save();
@@ -228,6 +235,17 @@ const updateSellerProduct = async (req, res) => {
     product.sise = req.body.sise
       ? req.body.sise.split(",").map(s => s.trim())
       : product.sise;
+      const allowedPolicies = ["free", "coordinar"];
+
+    if (req.body.shippingPolicy) {
+      product.shippingPolicy = allowedPolicies.includes(req.body.shippingPolicy)
+        ? req.body.shippingPolicy
+        : product.shippingPolicy;
+    }
+
+    if (req.body.shippingNote !== undefined) {
+      product.shippingNote = req.body.shippingNote;
+    }
 
     // 4️⃣ Guardar solo las imágenes finales
     product.image = imagesArray;
