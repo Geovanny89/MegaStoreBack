@@ -125,33 +125,53 @@ paymentMethods: {
         enum: ["phone", "email", "document", "random", "cod"],
         required: true
       },
-      value: { 
-        type: String, 
+
+      // 🔹 No obligatorio si es COD
+      value: {
+        type: String,
         required: function () {
           return this.type !== "cod";
         }
       },
+
       provider: {
         type: String,
         enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro", "cod"],
         required: true
       },
+
+      // 🔹 SOLO PARA CONTRAENTREGA
+      cities: {
+        type: [String],
+        default: [],
+      },
+
+      note: {
+        type: String,
+        default: ""
+      },
+
       qr: { type: String, default: null },
       active: { type: Boolean, default: true }
     }
   ],
+
+  // ✅ VALIDACIÓN SUAVE (NO OBLIGATORIA)
   validate: {
     validator: function (methods) {
-      // 1️⃣ No aplica si no es seller
+      // No validar si no es seller
       if (this.rol !== "seller") return true;
 
-      // 2️⃣ Durante el registro (identidad pendiente) NO exigir pagos
-      if (this.sellerStatus === "pending_identity") return true;
+      // Puede no tener métodos aún
+      if (!Array.isArray(methods)) return true;
 
-      // 3️⃣ En cualquier otro estado SÍ exigir COD
-      return Array.isArray(methods) && methods.some(m => m.type === "cod");
+      // Si hay COD, debe tener ciudades
+      const cod = methods.find(m => m.type === "cod");
+      if (cod && cod.cities.length === 0) return false;
+
+      return true;
     },
-    message: "El método de pago contraentrega es obligatorio."
+    message: "La contraentrega debe tener al menos una ciudad configurada."
   }
 },
 

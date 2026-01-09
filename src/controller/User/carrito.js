@@ -180,7 +180,7 @@ const deleteProductoCarrito =async (req,res) =>{
     console.error(error);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
-}
+} 
 const verCarritoPorTienda = async (req, res) => {
   try {
     const userId = req.user._id;

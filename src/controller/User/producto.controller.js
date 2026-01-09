@@ -45,26 +45,28 @@ const productoUser = async (req, res) => {
       if (!descuento) {
         return {
           ...product,
-          finalPrice: product.price,
+          finalPrice: product.price, 
           hasDiscount: false
         };
       }
 
-      let finalPrice =
-        descuento.type === "percentage"
-          ? product.price * (1 - descuento.value / 100)
-          : product.price - descuento.value;
+      const price = Number(product.price);
 
-      return {
-        ...product,
-        finalPrice: Math.max(finalPrice, 0),
-        hasDiscount: true,
-        discount: {
-          name: descuento.name,
-          type: descuento.type,
-          value: descuento.value
-        }
-      };
+let finalPrice =
+  descuento.type === "percentage"
+    ? price * (1 - descuento.value / 100)
+    : price - descuento.value;
+
+return {
+  ...product,
+  hasDiscount: true,
+  finalPrice: Math.max(Math.round(finalPrice), 0),
+  discount: {
+    name: descuento.name,
+    type: descuento.type,
+    value: descuento.value
+  }
+};
     });
 
     res.json(productosFinales);
