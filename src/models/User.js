@@ -65,7 +65,11 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true
     },
-
+storeSubcategories: {
+  type: [String],
+  default: [],
+  index: true
+},
     slug: {
       type: String,
       unique: true,
