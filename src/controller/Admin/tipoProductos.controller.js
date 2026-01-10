@@ -1,5 +1,6 @@
 
 const TipoProductos = require('../../models/TipoProductos')
+const User = require('../../models/User')
 /**
  * Obtener todos los tipos de productos.
  *
@@ -22,6 +23,31 @@ const allTipesProductos= async(req,res)=>{
         res.status(500).json({ message: error.message })
     }
 }
+
+const tiposPorCategoriaTienda = async (req, res) => {
+  try {
+    // 1️⃣ Buscar la tienda del vendedor
+ 
+    const store = await User.findById(req.user.id);
+
+    if (!store) {
+      return res.status(404).json({
+        message: "El vendedor no tiene tienda registrada"
+      });
+    }
+
+    // 2️⃣ Filtrar tipos por la categoría de la tienda
+   const tipos = await TipoProductos.find({
+  categoriaPadre: req.user.storeCategory
+});
+
+    res.status(200).json(tipos);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 /**
  * Obtener tipo por nombre.
@@ -163,5 +189,6 @@ module.exports ={
     allTipesProductos,
     tipeProductName,
     updateTipeName,
-    deleteTipe
+    deleteTipe,
+    tiposPorCategoriaTienda
 };
