@@ -10,7 +10,7 @@ const productosSchema = mongoose.Schema({
 
   },
   price: {
-    type: String,
+    type: Number,
     required: true // Corrección aquí
   },
   sise: [{

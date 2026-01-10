@@ -25,28 +25,59 @@ const getMyProducts = async (req, res) => {
  */
 const createSellerProduct = async (req, res) => {
   try {
-    const { name, price, brand, tipoId, color, stock, description, sise,shippingPolicy,shippingNote } = req.body;
+    const {
+      name,
+      price,
+      brand,
+      tipoId,
+      color,
+      stock,
+      description,
+      sise,
+      shippingPolicy,
+      shippingNote
+    } = req.body;
+
     const sellerId = req.user.id;
 
-    // Validar duplicado por vendedor
+    /* ================== SANITIZAR PRECIO Y STOCK ================== */
+    const cleanPrice = Number(
+      price?.toString().replace(/\./g, "").replace(/,/g, "")
+    );
+
+    const cleanStock = Number(stock);
+
+    if (isNaN(cleanPrice) || cleanPrice <= 0) {
+      return res.status(400).json({ message: "Precio inválido" });
+    }
+
+    if (isNaN(cleanStock) || cleanStock < 0) {
+      return res.status(400).json({ message: "Stock inválido" });
+    }
+
+    /* ================== VALIDAR DUPLICADO ================== */
     const existing = await Productos.findOne({ name, vendedor: sellerId });
-    if (existing) return res.status(400).json({ message: "Ya tienes un producto con este nombre." });
+    if (existing) {
+      return res.status(400).json({ message: "Ya tienes un producto con este nombre." });
+    }
 
-    // Validar tipo
+    /* ================== VALIDAR TIPO ================== */
     const tipo = await TipoProductos.findById(tipoId);
-    if (!tipo) return res.status(400).json({ message: "El tipo de producto no existe" });
+    if (!tipo) {
+      return res.status(400).json({ message: "El tipo de producto no existe" });
+    }
 
-    // Validar suscripción
+    /* ================== VALIDAR SUSCRIPCIÓN ================== */
     const suscripcion = await Suscripciones.findOne({
-  id_usuario: sellerId,
-  estado: { $in: ["activa", "trial"] }
-}).populate("plan_id");
+      id_usuario: sellerId,
+      estado: { $in: ["activa", "trial"] }
+    }).populate("plan_id");
 
-if (!suscripcion) {
-  return res.status(403).json({
-    message: "Necesitas una suscripción activa o un período de prueba"
-  });
-}
+    if (!suscripcion) {
+      return res.status(403).json({
+        message: "Necesitas una suscripción activa o un período de prueba"
+      });
+    }
 
     const limite =
       suscripcion.plan_id.nombre === "emprendedor"
@@ -58,30 +89,35 @@ if (!suscripcion) {
     const cantidad = await Productos.countDocuments({ vendedor: sellerId });
 
     if (limite !== null && cantidad >= limite) {
-      return res.status(403).json({ message: `Tu plan solo permite ${limite} productos` });
+      return res.status(403).json({
+        message: `Tu plan solo permite ${limite} productos`
+      });
     }
 
-    // Manejo de tallas
-    const sizesArray = sise ? sise.split(",").map((s) => s.trim()) : [];
+    /* ================== MANEJO DE TALLAS ================== */
+    const sizesArray = sise ? sise.split(",").map(s => s.trim()) : [];
+
     if (tipo.usaTalla && sizesArray.length === 0) {
       return res.status(400).json({ message: "Este producto requiere tallas" });
     }
+
     if (!tipo.usaTalla) sizesArray.length = 0;
 
-    // Manejo de colores
-    const colorsArray = color ? color.split(",").map((c) => c.trim()) : [];
+    /* ================== MANEJO DE COLORES ================== */
+    const colorsArray = color ? color.split(",").map(c => c.trim()) : [];
 
-    // Subir imágenes a Cloudinary
+    /* ================== ENVÍO ================== */
+    const allowedPolicies = ["free", "coordinar"];
+    const finalShippingPolicy = allowedPolicies.includes(shippingPolicy)
+      ? shippingPolicy
+      : "coordinar";
+
+    /* ================== SUBIR IMÁGENES ================== */
     const imageUrls = await Promise.all(
       req.files.map(file => {
         if (!file.buffer) {
           throw new Error("Archivo de imagen inválido");
         }
-/* ================= ENVÍO ================= */
-    const allowedPolicies = ["free", "coordinar"];
-    const finalShippingPolicy = allowedPolicies.includes(shippingPolicy)
-      ? shippingPolicy
-      : "coordinar";
 
         return new Promise((resolve, reject) => {
           const upload = cloudinary.uploader.upload_stream(
@@ -102,28 +138,32 @@ if (!suscripcion) {
       })
     );
 
-
+    /* ================== CREAR PRODUCTO ================== */
     const nuevoProducto = new Productos({
       name,
-      price,
+      price: cleanPrice,       // 🔒 SIEMPRE NUMBER
       brand,
-      stock,
+      stock: cleanStock,       // 🔒 SIEMPRE NUMBER
       description,
       sise: sizesArray,
       color: colorsArray,
       image: imageUrls,
       tipo: tipoId,
       vendedor: sellerId,
-       shippingPolicy: finalShippingPolicy,
+      shippingPolicy: finalShippingPolicy,
       shippingNote: shippingNote || ""
     });
 
     await nuevoProducto.save();
+
     res.json(nuevoProducto);
+
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 /**
  * Actualizar producto del vendedor

@@ -52,10 +52,16 @@ const userSchema = new mongoose.Schema(
 
     /* ================= TIENDA ================= */
     storeName: { type: String, default: null },
+    storeDescription: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 500
+    },
 
     storeCategory: {
       type: String,
-      enum: STORE_CATEGORIES, 
+      enum: STORE_CATEGORIES,
       default: null,
       index: true
     },
@@ -117,63 +123,61 @@ const userSchema = new mongoose.Schema(
     paymentDate: { type: Date, default: null },
 
     /* ================= MÉTODOS DE PAGO ================= */
-paymentMethods: {
-  type: [
-    {
-      type: {
-        type: String,
-        enum: ["phone", "email", "document", "random", "cod"],
-        required: true
-      },
+    paymentMethods: {
+      type: [
+        {
+          type: {
+            type: String,
+            enum: ["phone", "email", "document", "random", "cod"],
+            required: true
+          },
 
-      // 🔹 No obligatorio si es COD
-      value: {
-        type: String,
-        required: function () {
-          return this.type !== "cod";
+          // No obligatorio si es contraentrega
+          value: {
+            type: String,
+            required: function () {
+              return this.type !== "cod";
+            }
+          },
+
+          provider: {
+            type: String,
+            enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro", "cod"],
+            required: true
+          },
+
+          // Opcional: solo si el vendedor quiere
+          cities: {
+            type: [String],
+            default: []
+          },
+
+          // ✅ NOTA LIBRE (como productos free)
+          note: {
+            type: String,
+            default: ""
+          },
+
+          qr: { type: String, default: null },
+          active: {
+            type: Boolean,
+            default: function () {
+              return this.type !== "cod";
+            }
+          }
         }
-      },
+      ],
 
-      provider: {
-        type: String,
-        enum: ["nequi", "daviplata", "bancolombia", "bbva", "llaves", "otro", "cod"],
-        required: true
-      },
-
-      // 🔹 SOLO PARA CONTRAENTREGA
-      cities: {
-        type: [String],
-        default: [],
-      },
-
-      note: {
-        type: String,
-        default: ""
-      },
-
-      qr: { type: String, default: null },
-      active: { type: Boolean, default: true }
-    }
-  ],
-
-  // ✅ VALIDACIÓN SUAVE (NO OBLIGATORIA)
-  validate: {
-    validator: function (methods) {
-      // No validar si no es seller
-      if (this.rol !== "seller") return true;
-
-      // Puede no tener métodos aún
-      if (!Array.isArray(methods)) return true;
-
-      // Si hay COD, debe tener ciudades
-      const cod = methods.find(m => m.type === "cod");
-      if (cod && cod.cities.length === 0) return false;
-
-      return true;
+      // ✅ VALIDACIÓN REALMENTE OPCIONAL
+      validate: {
+        validator: function (methods) {
+          if (this.rol !== "seller") return true;
+          if (!Array.isArray(methods)) return true;
+          return true; // ← NO obligamos ciudades
+        }
+      }
     },
-    message: "La contraentrega debe tener al menos una ciudad configurada."
-  }
-},
+
 
     /* ================= PLAN DE SUSCRIPCIÓN ================= */
     subscriptionPlan: {
