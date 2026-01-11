@@ -124,7 +124,7 @@ const welcomeSellerMail = (email, name) => {
             </ul>
           </div>
           <div style="text-align: center; margin-top: 30px;">
-            <a href="https://vendedores.k-dice.com" 
+            <a href="https://www.k-dice.com" 
                style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px 40px; border-radius: 8px; text-decoration: none; font-weight: 600;">
                Acceder al Panel de Control
             </a>
