@@ -157,6 +157,7 @@ const createSellerProduct = async (req, res) => {
     await nuevoProducto.save();
 
     res.json(nuevoProducto);
+    console.log(nuevoProducto)
 
   } catch (error) {
     console.error(error);

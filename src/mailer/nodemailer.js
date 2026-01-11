@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
 
 // Definimos el remitente oficial para todas las plantillas
 const OFFICIAL_FROM = `"K-DICE Marketplace" <${EMAIL_USER}>`;
-const logoPath = path.join(__dirname, "..", "..", "assets", "logo3.png");
+const logoPath = path.join(__dirname, "..", "..", "assets", "Logo3.png");
 
 /* ===================== CORREO BIENVENIDA (REDISEÑADO) ===================== */
 const mailDetails = (email, name) => {
@@ -69,7 +69,7 @@ const mailDetails = (email, name) => {
         </div>
       </div>
     `,
-    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+    attachments: [{ filename: "Logo3.png", path: logoPath, cid: "logo" }],
   };
 };
 
@@ -135,7 +135,7 @@ const welcomeSellerMail = (email, name) => {
         </div>
       </div>
     `,
-    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+    attachments: [{ filename: "Logo3.png", path: logoPath, cid: "logo" }],
   };
 };
 /* ===================== CORREO NUEVA VENTA (VENDEDOR) ===================== */
@@ -196,7 +196,7 @@ const sellerNewOrderMail = (sellerEmail, sellerName, order) => {
         </div>
       </div>
     `,
-    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+    attachments: [{ filename: "Logo3.png", path: logoPath, cid: "logo" }],
   };
 };
 /* ===================== CORREO NUEVO MENSAJE DE CHAT ===================== */
@@ -262,7 +262,7 @@ const paymentProofNotificationMail = (sellerEmail, sellerName, orderId, buyerNam
         </div>
       </div>
     `,
-    attachments: [{ filename: "logo3.png", path: logoPath, cid: "logo" }],
+    attachments: [{ filename: "Logo3.png", path: logoPath, cid: "logo" }],
   };
 };
 
