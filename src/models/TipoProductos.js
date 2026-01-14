@@ -4,7 +4,7 @@ const tipoProductosSchema = mongoose.Schema({
     name: { 
         type: String, 
         required: true, 
-        unique: true 
+       
     },
     // 👇 Amigable para Google: "Moda y Accesorios" -> "moda-y-accesorios"
     slug: { 

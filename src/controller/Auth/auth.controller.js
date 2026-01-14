@@ -4,7 +4,7 @@ const Planes = require('../../models/Planes');
 const { matchedData } = require('express-validator');
 const { encrypt, compare } = require('../../utils/handlePassword');
 const { tokenSign } = require('../../utils/handleJwt');
-const { transporter, mailDetails, welcomeSellerMail } = require('../../mailer/nodemailer');
+const { transporter, mailDetails, welcomeSellerMail, adminNewSellerMail } = require('../../mailer/nodemailer');
 const crypto = require("crypto");
 const cloudinary = require("../../utils/cloudinary");
 const slugify = require('slugify');
@@ -72,10 +72,14 @@ const registerSeller = async (req, res) => {
     /* ================= 2. PROCESOS PESADOS EN PARALELO ================= */
     // Cloudinary y Encriptación corren al tiempo para ahorrar segundos
     const [storeLogoResult, hashedPassword, plan] = await Promise.all([
-      uploadToCloudinary(req.files["image"][0], "store_logos"),
-      encrypt(data.password),
-      Planes.findOne({ _id: data.planId, estado: "activo" })
-    ]);
+  uploadToCloudinary(req.files["image"][0], "store_logos"),
+  encrypt(data.password),
+  Planes.findOne({
+    estado: "activo",
+    precio: 79900 // 🔥 SOLO PREMIUM
+  })
+]);
+
 
     if (!plan) {
       return res.status(404).json({ error: "Plan inválido o inactivo" });
@@ -111,7 +115,7 @@ const registerSeller = async (req, res) => {
     await newUser.save();
 
     /* ================= 5. CREAR SUSCRIPCIÓN TRIAL ================= */
-    const trialDurationDays = 5;
+    const trialDurationDays = 10;
     const expirationDate = new Date(Date.now() + trialDurationDays * 24 * 60 * 60 * 1000);
 
     const trial = await Suscripciones.create({
@@ -130,10 +134,13 @@ const registerSeller = async (req, res) => {
     transporter.sendMail(welcomeSellerMail(newUser.email, newUser.name))
       .then(() => console.log(`📧 Email enviado a ${newUser.email}`))
       .catch(err => console.error("❌ Error enviando email:", err));
+    transporter.sendMail(adminNewSellerMail({name: newUser.name,email: newUser.email,storeName: newUser.storeName}))
+      .then(() => console.log("📧 Notificación enviada al ADMIN"))
+      .catch(err => console.error("❌ Error email admin:", err));
 
     /* ================= 7. RESPUESTA FINAL AL CLIENTE ================= */
     return res.status(201).json({
-      message: "Registro exitoso. Disfruta de 5 días de prueba. Al finalizar deberás subir el comprobante de pago.",
+      message: "Registro exitoso. Disfruta de 10 días de prueba. Al finalizar deberás subir el comprobante de pago.",
       usuario: {
         id: newUser._id,
         email: newUser.email,

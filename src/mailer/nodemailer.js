@@ -265,6 +265,51 @@ const paymentProofNotificationMail = (sellerEmail, sellerName, orderId, buyerNam
     attachments: [{ filename: "Logo3.png", path: logoPath, cid: "logo" }],
   };
 };
+/* ===================== CORREO NUEVO VENDEDOR (ADMIN) ===================== */
+const adminNewSellerMail = ({ name, email, storeName }) => {
+  const currentDate = new Date().toLocaleString("es-CO");
+
+  return {
+    from: OFFICIAL_FROM,
+    to: "gcasadiegosr@gmail.com",
+    subject: "🆕 Nuevo vendedor registrado en K-DICE",
+    html: `
+      <div style="max-width:600px;margin:auto;font-family:Arial,sans-serif;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+        <div style="background:#111827;color:white;padding:25px;text-align:center;">
+          <h2 style="margin:0;">Nuevo Vendedor Registrado</h2>
+        </div>
+
+        <div style="padding:30px;background:white;">
+          <p style="color:#6b7280;font-size:13px;">${currentDate}</p>
+
+          <p><strong>Nombre:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          ${storeName ? `<p><strong>Tienda:</strong> ${storeName}</p>` : ""}
+
+          <div style="margin-top:25px;padding:15px;background:#f0fdf4;border-left:4px solid #10b981;border-radius:6px;">
+            <p style="margin:0;color:#064e3b;">
+              El vendedor ya puede acceder al panel y comenzar a cargar productos.
+            </p>
+          </div>
+
+          <div style="text-align:center;margin-top:30px;">
+            <a
+              href="https://www.k-dice.com/login"
+              style="background:#10b981;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;"
+            >
+              Ir al Panel Admin
+            </a>
+          </div>
+        </div>
+
+        <div style="background:#f9fafb;padding:15px;text-align:center;font-size:12px;color:#6b7280;">
+          Notificación automática – K-DICE Marketplace
+        </div>
+      </div>
+    `
+  };
+};
+
 
 // Recuerda agregar 'paymentProofNotificationMail' al module.exports
 // No olvides añadirlo al module.exports
@@ -275,5 +320,6 @@ module.exports = {
   welcomeSellerMail,
   sellerNewOrderMail,
   chatNotificationMail,
-  paymentProofNotificationMail
+  paymentProofNotificationMail,
+  adminNewSellerMail
 };

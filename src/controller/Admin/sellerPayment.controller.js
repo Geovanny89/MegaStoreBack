@@ -72,7 +72,7 @@ const uploadPaymentProof = async (req, res) => {
 const getSellerMe = async (req, res) => {
   try {
     const sellerId = req.user.id;
-    console.log("vendedor",sellerId)
+    // console.log("vendedor",sellerId)
     const seller = await User.findById(sellerId).select(
       "name storeName slug sellerStatus rol verification paymentMethods"
     );

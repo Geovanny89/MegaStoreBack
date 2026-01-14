@@ -89,51 +89,57 @@ const tipeProductName = async(req,res)=>{
  * Genera automáticamente el SEO (slug) a partir del nombre ingresado por el Admin.
  */
 const createTipeProduct = async (req, res) => {
-    try {
-        const { name, categoriaPadre, usaTalla } = req.body;
+  try {
+    const { name, categoriaPadre, usaTalla } = req.body;
 
-        // 1. Validaciones de datos obligatorios
-        if (!name || !categoriaPadre) {
-            return res.status(400).send("Faltan datos: El nombre y el rubro de la tienda son obligatorios.");
-        }
-
-        // 2. Verificar si el nombre ya existe para evitar duplicados
-        const existingTipe = await TipoProductos.findOne({ name });
-        if (existingTipe) {
-            return res.status(400).send("Este tipo de producto ya existe.");
-        }
-
-        // 3. GENERACIÓN AUTOMÁTICA DEL SLUG (SEO)
-        // Esto convierte "Moda y Accesorios" en "moda-y-accesorios" automáticamente
-        const generatedSlug = name
-            .toLowerCase()
-            .normalize("NFD")               // Separa tildes de las letras
-            .replace(/[\u0300-\u036f]/g, "") // Elimina las tildes
-            .replace(/[^a-z0-9\s-]/g, "")    // Elimina caracteres especiales (@, #, $, etc)
-            .trim()
-            .replace(/\s+/g, "-")           // Cambia espacios por guiones
-            .replace(/-+/g, "-");           // Evita guiones dobles
-
-        // 4. Crear el registro en la base de datos
-        const newTipe = new TipoProductos({
-            name,
-            categoriaPadre,
-            usaTalla: usaTalla || false,
-            slug: generatedSlug, // Se guarda automáticamente para el SEO del Marketplace
-            metaTitle: `${name} | Las mejores ofertas en nuestro Marketplace`,
-            description: `Encuentra una amplia variedad de ${name} de las mejores tiendas de ${categoriaPadre}.`
-        });
-
-        await newTipe.save();
-        
-        // Enviamos la respuesta con el objeto creado
-        res.status(201).json(newTipe);
-
-    } catch (error) {
-        console.error("Error al crear tipo de producto:", error);
-        res.status(500).json({ message: error.message });
+    if (!name || !categoriaPadre) {
+      return res.status(400).json({
+        message: "El nombre y la categoría padre son obligatorios."
+      });
     }
-}
+
+    // ✅ Duplicado SOLO dentro del mismo padre
+    const existingTipe = await TipoProductos.findOne({
+      name,
+      categoriaPadre
+    });
+
+    if (existingTipe) {
+      return res.status(400).json({
+        message: "Esta subcategoría ya existe en esta categoría."
+      });
+    }
+
+    const baseSlug = (text) =>
+      text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-");
+
+    const generatedSlug = `${baseSlug(name)}-${baseSlug(categoriaPadre)}`;
+
+    const newTipe = new TipoProductos({
+      name,
+      categoriaPadre,
+      usaTalla: usaTalla || false,
+      slug: generatedSlug,
+      metaTitle: `${name} | Ofertas en ${categoriaPadre}`,
+      description: `Encuentra ${name} de las mejores tiendas de ${categoriaPadre}.`
+    });
+
+    await newTipe.save();
+    res.status(201).json(newTipe);
+
+  } catch (error) {
+    console.error("Error al crear tipo de producto:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 /**
  * Actualizar tipo de producto.
  *
