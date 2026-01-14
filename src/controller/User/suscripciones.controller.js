@@ -37,7 +37,7 @@ const crearSuscripcion = async (req, res) => {
     // 3️⃣ Fechas del TRIAL (5 días)
     const fechaInicio = new Date();
     const fechaVencimiento = new Date();
-    fechaVencimiento.setDate(fechaInicio.getDate() + 5);
+    fechaVencimiento.setDate(fechaInicio.getDate() + 10);
 
     // 4️⃣ Crear suscripción GRATIS
     const suscripcion = await Suscripciones.create({
